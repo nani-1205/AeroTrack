@@ -1,0 +1,10 @@
+#!/usr/bin/env ruby
+# Service entrypoint: wait for Postgres -> apply pending migrations -> serve HTTP.
+require_relative "../config/environment"
+require_relative "../lib/startup"
+
+Startup.wait_for_database!
+Startup.migrate!
+
+require "puma/cli"
+Puma::CLI.new(["--config", File.expand_path("../config/puma.rb", __dir__)]).run

@@ -1,0 +1,29 @@
+# --- Secrets & generated config (templates *.example.json ARE committed) ---
+config/services.json
+config/gateway.json
+config/keys/
+.env
+
+# --- Node / Angular ---
+node_modules/
+dist/
+.angular/
+coverage/
+
+# --- Rust ---
+services/tracking-service/target/
+
+# --- Go ---
+services/auth-service/bin/
+
+# --- Ruby ---
+.bundle/
+services/analytics-service/log/
+services/analytics-service/tmp/
+services/analytics-service/vendor/bundle/
+
+# --- Misc ---
+*.log
+.DS_Store
+Thumbs.db
+.idea/

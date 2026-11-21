@@ -1,0 +1,24 @@
+# Values come from config/services.json (shared.postgres + analytics.db). Do not put secrets here.
+<%
+  pg = ServiceConfig.postgres
+  db = ServiceConfig.db
+%>
+default: &default
+  adapter: postgresql
+  host: <%= pg.fetch("host").to_json %>
+  port: <%= Integer(pg.fetch("port")) %>
+  database: <%= pg.fetch("database").to_json %>
+  username: <%= db.fetch("user").to_json %>
+  password: <%= db.fetch("password").to_json %>
+  sslmode: <%= pg.fetch("sslmode", "prefer").to_json %>
+  connect_timeout: <%= Integer(pg.fetch("connectTimeoutSeconds", 5)) %>
+  schema_search_path: <%= db.fetch("schema").to_json %>
+  application_name: analytics-service
+  pool: 10
+
+development:
+  <<: *default
+test:
+  <<: *default
+production:
+  <<: *default

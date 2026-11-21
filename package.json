@@ -1,0 +1,17 @@
+{
+  "name": "aerotrack",
+  "private": true,
+  "description": "AeroTrack — live aircraft & air-traffic tracking (microservices monorepo)",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "infra:up": "node scripts/sync-compose-env.mjs && docker compose up -d --wait",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f",
+    "dev:gateway": "npm --prefix gateway run dev",
+    "dev:auth": "cd services/auth-service && go run ./cmd/auth",
+    "dev:tracking": "cd services/tracking-service && cargo run",
+    "dev:analytics": "cd services/analytics-service && ruby bin/start",
+    "dev:user-portal": "npm --prefix frontend run start:user",
+    "dev:admin-portal": "npm --prefix frontend run start:admin"
+  }
+}

@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# During local development every service runs on the host machine.
+scrape_configs:
+  - job_name: gateway
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+        labels: { service: gateway }
+
+  - job_name: auth-service
+    static_configs:
+      - targets: ["host.docker.internal:7001"]
+        labels: { service: auth }
+
+  - job_name: tracking-service
+    static_configs:
+      - targets: ["host.docker.internal:7002"]
+        labels: { service: tracking }
+
+  - job_name: analytics-service
+    static_configs:
+      - targets: ["host.docker.internal:7003"]
+        labels: { service: analytics }

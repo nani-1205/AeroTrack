@@ -1,0 +1,50 @@
+{
+  "env": "development",
+
+  "listen": { "host": "0.0.0.0", "port": 8080 },
+
+  "cors": {
+    "origins": ["http://localhost:4200", "http://localhost:4201"],
+    "credentials": true
+  },
+
+  "cookie": {
+    "secret": "CHANGE_ME",
+    "secure": false,
+    "sameSite": "lax",
+    "accessTokenName": "aerotrack_at",
+    "adminAccessTokenName": "aerotrack_admin_at"
+  },
+
+  "jwt": {
+    "jwksUrl": "http://localhost:7001/.well-known/jwks.json",
+    "issuer": "aerotrack-auth",
+    "userAudience": "aerotrack-user",
+    "adminAudience": "aerotrack-admin"
+  },
+
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "password": "CHANGE_ME",
+    "db": 0
+  },
+
+  "internalToken": "CHANGE_ME",
+
+  "rateLimit": { "max": 300, "windowSeconds": 60 },
+
+  "websocket": {
+    "path": "/ws",
+    "maxFlightsPerClient": 5,
+    "sameAirlineOnly": true
+  },
+
+  "routes": [
+    { "prefix": "/api/auth",       "target": "http://localhost:7001", "access": "public" },
+    { "prefix": "/api/admin/auth", "target": "http://localhost:7001", "access": "public" },
+    { "prefix": "/api/airlines",   "target": "http://localhost:7002", "access": "user" },
+    { "prefix": "/api/flights",    "target": "http://localhost:7002", "access": "user" },
+    { "prefix": "/api/admin",      "target": "http://localhost:7003", "access": "admin" }
+  ]
+}

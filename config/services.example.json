@@ -1,0 +1,92 @@
+{
+  "env": "development",
+
+  "infra": {
+    "postgresSuperuser": "postgres",
+    "postgresSuperuserPassword": "CHANGE_ME"
+  },
+
+  "shared": {
+    "postgres": {
+      "host": "localhost",
+      "port": 5432,
+      "database": "aerotrack",
+      "sslmode": "disable",
+      "connectTimeoutSeconds": 5,
+      "startupRetries": 30
+    },
+    "redis": {
+      "host": "localhost",
+      "port": 6379,
+      "password": "CHANGE_ME",
+      "db": 0
+    },
+    "jwt": {
+      "issuer": "aerotrack-auth",
+      "userAudience": "aerotrack-user",
+      "adminAudience": "aerotrack-admin",
+      "accessTtlSeconds": 900,
+      "refreshTtlSeconds": 604800
+    },
+    "internalToken": "CHANGE_ME"
+  },
+
+  "auth": {
+    "listen": "0.0.0.0:7001",
+    "db": { "schema": "auth", "user": "auth_svc", "password": "CHANGE_ME" },
+    "github": {
+      "clientId": "",
+      "clientSecret": "",
+      "callbackUrl": "http://localhost:8080/api/auth/github/callback",
+      "scopes": ["read:user", "user:email"]
+    },
+    "admin": {
+      "bootstrapUsername": "admin",
+      "bootstrapPassword": "CHANGE_ME",
+      "maxFailedAttempts": 5,
+      "lockoutMinutes": 15
+    },
+    "jwtPrivateKeyPath": "keys/jwt-private.pem",
+    "jwtPublicKeyPath": "keys/jwt-public.pem",
+    "portals": {
+      "userUrl": "http://localhost:4200",
+      "adminUrl": "http://localhost:4201"
+    }
+  },
+
+  "tracking": {
+    "listen": "0.0.0.0:7002",
+    "db": { "schema": "tracking", "user": "tracking_svc", "password": "CHANGE_ME" },
+    "provider": "simulator",
+    "calls": {
+      "opensky": {
+        "baseUrl": "https://opensky-network.org/api",
+        "tokenUrl": "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token",
+        "clientId": "",
+        "clientSecret": "",
+        "pollIntervalSeconds": 60
+      },
+      "adsbLol": {
+        "baseUrl": "https://api.adsb.lol/v2",
+        "pollIntervalSeconds": 5
+      },
+      "simulator": {
+        "flightsPerAirline": 20,
+        "tickSeconds": 2
+      }
+    },
+    "maxTrackedFlights": 5,
+    "positionRetentionDays": 7
+  },
+
+  "analytics": {
+    "listen": "0.0.0.0:7003",
+    "db": { "schema": "analytics", "user": "analytics_svc", "password": "CHANGE_ME" },
+    "secretKeyBase": "CHANGE_ME",
+    "calls": {
+      "prometheus": "http://localhost:9090",
+      "auth": "http://localhost:7001",
+      "tracking": "http://localhost:7002"
+    }
+  }
+}
