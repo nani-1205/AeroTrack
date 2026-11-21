@@ -26,6 +26,9 @@ module AnalyticsService
     config.logger = ActiveSupport::TaggedLogging.new(ActiveSupport::Logger.new($stdout))
     config.log_level = :info
 
+    # Small lookups (airline names) are cached in-process.
+    config.cache_store = :memory_store, { size: 8 * 1024 * 1024 }
+
     # Migrations run at startup (bin/start); never write schema dumps from the running service.
     config.active_record.dump_schema_after_migration = false
 

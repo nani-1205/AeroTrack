@@ -1,0 +1,167 @@
+<div class="page">
+  <header class="page-header">
+    <div class="titles">
+      <span class="eyebrow">Monitoring</span>
+      <h1>Overview</h1>
+      <p class="subtitle">Who is signed in, what people are tracking, and how the platform is doing.</p>
+    </div>
+  </header>
+
+  <!-- One filter row, above everything it scopes. -->
+  <div class="filters">
+    <div class="seg" role="group" aria-label="Time range">
+      @for (r of ranges; track r.key) {
+        <button type="button" [class.on]="range() === r.key" (click)="range.set(r.key)" [attr.aria-pressed]="range() === r.key">{{ r.label }}</button>
+      }
+    </div>
+    <button type="button" class="btn btn-sm" (click)="load(range())" [disabled]="loading()">
+      <ui-icon [icon]="icons.RefreshCw" [size]="14" [class.spin]="loading()" /> Refresh
+    </button>
+    <span class="subtle updated">Updated {{ ago(updatedAt()) }} · auto-refreshes every 30 s</span>
+  </div>
+
+  @if (error(); as message) {
+    <div class="alert warning" role="status"><ui-icon [icon]="icons.Alert" [size]="16" /><span>{{ message }}</span></div>
+  }
+
+  <section class="grid-kpi" aria-label="Key figures">
+    <ui-stat label="Signed in now" [icon]="icons.LogIn" [loading]="!overview()"
+             [value]="fmt(overview()?.users?.signedInNow)"
+             [hint]="overview()?.admins ? fmt(overview()!.admins!.signedInNow) + ' admin session' + (overview()!.admins!.signedInNow === 1 ? '' : 's') + ' active' : null" />
+    <ui-stat label="Registered users" [icon]="icons.Users" [loading]="!overview()"
+             [value]="fmt(overview()?.users?.total)"
+             [hint]="overview()?.users ? '+' + fmt(overview()!.users!.new7d) + ' this week · ' + fmt(overview()!.users!.activeToday) + ' active today' : null" />
+    <ui-stat label="Aircraft tracked now" [icon]="icons.Plane" [loading]="!overview()"
+             [value]="fmt(overview()?.tracking?.aircraftNow)"
+             [hint]="overview()?.tracking?.airlinesNow != null ? 'across ' + fmt(overview()!.tracking.airlinesNow) + ' airlines' : null" />
+    <ui-stat label="Live map viewers" [icon]="icons.Eye" [loading]="!overview()"
+             [value]="fmt(overview()?.tracking?.liveViewers)"
+             [hint]="overview() ? fmt(overview()!.tracking.sessionsToday) + ' tracking sessions today' : null" />
+  </section>
+
+  <div class="row two">
+    <ui-chart-card heading="Activity" [subheading]="activity() ? fmt(activity()!.totals.userLogins) + ' sign-ins · ' + fmt(activity()!.totals.trackingSessions) + ' tracking sessions · ' + fmt(activity()!.totals.signups) + ' sign-ups, ' + rangeLabel() : ''"
+                   [stale]="loading() && !!activity()">
+      @if (activity()) {
+        <ui-line-chart [series]="activitySeries()" [xFormat]="xTick()" [xTooltip]="xTooltip()" [height]="260" ariaLabel="User sign-ins, tracking sessions and sign-ups over time" />
+      } @else {
+        <span class="skeleton" style="height:260px"></span>
+      }
+      <div table class="table-scroll">
+        <table class="table">
+          <thead><tr><th>Period</th><th class="num">Sign-ins</th><th class="num">Tracking sessions</th><th class="num">Sign-ups</th><th class="num">Failed admin sign-ins</th></tr></thead>
+          <tbody>
+            @for (p of activity()?.points ?? []; track p.t) {
+              <tr><td>{{ bucketLabel(p.t) }}</td><td class="num">{{ p.userLogins }}</td><td class="num">{{ p.trackingSessions }}</td><td class="num">{{ p.signups }}</td><td class="num">{{ p.failedAdminLogins }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </ui-chart-card>
+
+    <section class="card feed">
+      <header class="card-header"><h2>Recent activity</h2><span class="hint">latest 12 events</span></header>
+      @if (events(); as list) {
+        @if (list.length === 0) {
+          <ui-empty-state [icon]="icons.LogIn" heading="No activity yet" description="Sign-ins and tracking sessions will appear here." />
+        } @else {
+          <ol>
+            @for (e of list; track e.at + e.type + e.subjectId) {
+              @let d = describe(e);
+              <li>
+                <span class="ev-icon" [class]="'ev-icon ' + d.tone"><ui-icon [icon]="d.icon" [size]="14" /></span>
+                <span class="ev-text">
+                  <span>{{ d.text }}</span>
+                  @if (e.callsigns?.length) { <span class="mono subtle">{{ e.callsigns!.join(', ') }}</span> }
+                </span>
+                <time class="subtle" [attr.datetime]="e.at">{{ when(e.at) }}</time>
+              </li>
+            }
+          </ol>
+        }
+      } @else {
+        <div class="pad">@for (i of [1, 2, 3, 4]; track i) { <span class="skeleton" style="height:18px;margin-bottom:12px"></span> }</div>
+      }
+    </section>
+  </div>
+
+  <div class="row three">
+    <ui-chart-card heading="Most tracked airlines" [subheading]="'tracking sessions, ' + rangeLabel()" [stale]="loading() && !!top()">
+      @if (airlineBars().length) {
+        <ui-bar-list [items]="airlineBars()" unit="sessions" />
+      } @else {
+        <ui-empty-state [icon]="icons.Plane" heading="Nothing tracked yet" [description]="'No live-tracking sessions ' + rangeLabel() + '.'" />
+      }
+      <div table class="table-scroll">
+        <table class="table">
+          <thead><tr><th>Airline</th><th class="num">Sessions</th><th class="num">Flights followed</th></tr></thead>
+          <tbody>
+            @for (a of top()?.airlines ?? []; track a.icao) {
+              <tr><td>{{ a.name }} <span class="mono subtle">{{ a.icao }}</span></td><td class="num">{{ a.sessions }}</td><td class="num">{{ a.flights }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </ui-chart-card>
+
+    <section class="card">
+      <header class="card-header"><h2>Most tracked flights</h2><span class="hint">{{ rangeLabel() }}</span></header>
+      @if (top()?.flights?.length) {
+        <table class="table compact">
+          <thead><tr><th>Flight</th><th>Airline</th><th class="num">Sessions</th></tr></thead>
+          <tbody>
+            @for (f of top()!.flights; track f.callsign; let i = $index) {
+              <tr><td><span class="rank">{{ i + 1 }}</span><strong class="mono">{{ f.callsign }}</strong></td><td class="mono subtle">{{ f.airlineIcao }}</td><td class="num">{{ f.sessions }}</td></tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <ui-empty-state [icon]="icons.Plane" heading="No flights tracked yet" />
+      }
+      @if (top()?.users?.length) {
+        <header class="card-header sub"><h3>Top trackers</h3></header>
+        <ul class="people">
+          @for (u of top()!.users; track u.id) {
+            <li>
+              @if (u.avatarUrl) { <img [src]="u.avatarUrl" alt="" /> } @else { <ui-monogram [code]="u.id" [label]="(u.login || '?').slice(0, 2).toUpperCase()" [size]="28" /> }
+              <span class="who">{{ u.name || u.login || 'Unknown user' }}@if (u.login) { <span class="subtle"> &#64;{{ u.login }}</span> }</span>
+              <span class="tabular">{{ u.sessions }}</span>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <div class="stack">
+      <section class="card">
+        <header class="card-header"><h2>Service health</h2><span class="hint">{{ servicesUp() }} of {{ overview()?.services?.length ?? 4 }} up</span></header>
+        <ul class="health">
+          @for (s of overview()?.services ?? []; track s.job) {
+            <li>
+              @if (s.up) {
+                <span class="status ok"><ui-icon [icon]="icons.CircleCheck" [size]="15" /> Up</span>
+              } @else {
+                <span class="status down"><ui-icon [icon]="icons.CircleX" [size]="15" /> {{ s.up === false ? 'Down' : 'Unknown' }}</span>
+              }
+              <strong>{{ s.name }}</strong><span class="subtle">{{ s.stack }}</span>
+            </li>
+          }
+        </ul>
+      </section>
+
+      <section class="card security">
+        <header class="card-header"><h2>Security</h2><span class="hint">admin sign-ins, {{ rangeLabel() }}</span></header>
+        <div class="pad">
+          @let failed = activity()?.totals?.failedAdminLogins ?? 0;
+          @if (failed > 0) {
+            <span class="status warn"><ui-icon [icon]="icons.ShieldAlert" [size]="18" /> {{ failed }} failed attempt{{ failed === 1 ? '' : 's' }}</span>
+            <p class="subtle">Accounts lock after repeated failures. Review the activity feed for details.</p>
+          } @else {
+            <span class="status ok"><ui-icon [icon]="icons.ShieldCheck" [size]="18" /> No failed attempts</span>
+            <p class="subtle">Every admin sign-in attempt is logged and rate-limited.</p>
+          }
+        </div>
+      </section>
+    </div>
+  </div>
+</div>

@@ -63,10 +63,16 @@ const frames = new Counter({
   registers: [registry],
 });
 
+/** Usage events for analytics (Redis stream `events:tracking`). Best-effort: never blocks tracking. */
+export interface TrackingEvents {
+  publish(fields: Record<string, string>): void;
+}
+
 export interface LiveSocketDeps {
   cfg: GatewayConfig;
   verifier: TokenVerifier;
   bus: PositionBus;
+  events?: TrackingEvents;
 }
 
 export function registerLiveSocket(app: FastifyInstance, deps: LiveSocketDeps) {
@@ -202,6 +208,14 @@ class LiveSession {
     const ttl = result.body.watchTtlSeconds;
     this.keepalive = setInterval(() => void this.refreshWatch(), Math.max(5, Math.floor(ttl / 2)) * 1000);
     this.send({ type: 'subscribed', airline: result.body.airline, flights: result.body.flights, watchTtlSeconds: ttl });
+    this.deps.events?.publish({
+      type: 'track.start',
+      userId: this.principal!.sub,
+      airline,
+      icao24s: JSON.stringify(ids),
+      callsigns: JSON.stringify(result.body.flights.map((f) => String(f['callsign'] ?? f.icao24))),
+      at: new Date().toISOString(),
+    });
   }
 
   private async stopTracking(): Promise<void> {

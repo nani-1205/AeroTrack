@@ -67,6 +67,70 @@ func (s *Store) UserByID(ctx context.Context, id string) (User, error) {
 	return scanUser(s.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1`, id))
 }
 
+// UserSummary is the headline user count block for the admin console.
+type UserSummary struct {
+	Total       int64 `json:"total"`
+	NewToday    int64 `json:"newToday"`
+	New7d       int64 `json:"new7d"`
+	ActiveToday int64 `json:"activeToday"`
+	Active7d    int64 `json:"active7d"`
+}
+
+func (s *Store) UserSummary(ctx context.Context) (UserSummary, error) {
+	var u UserSummary
+	err := s.db.QueryRow(ctx, `
+		SELECT count(*),
+		       count(*) FILTER (WHERE created_at    >= date_trunc('day', now())),
+		       count(*) FILTER (WHERE created_at    >= now() - interval '7 days'),
+		       count(*) FILTER (WHERE last_login_at >= date_trunc('day', now())),
+		       count(*) FILTER (WHERE last_login_at >= now() - interval '7 days')
+		FROM users`).Scan(&u.Total, &u.NewToday, &u.New7d, &u.ActiveToday, &u.Active7d)
+	return u, err
+}
+
+// ListUsers pages through users (most recently active first), optionally filtered by a
+// case-insensitive search over login, name and email. Returns the page and the total match count.
+func (s *Store) ListUsers(ctx context.Context, search string, limit, offset int) ([]User, int64, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT `+userColumns+`, count(*) OVER ()
+		FROM users
+		WHERE $1 = '' OR login ILIKE '%' || $1 || '%' OR name ILIKE '%' || $1 || '%' OR email ILIKE '%' || $1 || '%'
+		ORDER BY last_login_at DESC NULLS LAST, created_at DESC
+		LIMIT $2 OFFSET $3`, search, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	users := []User{}
+	var total int64
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.GitHubID, &u.Login, &u.Name, &u.Email, &u.AvatarURL, &u.IsActive, &u.CreatedAt, &u.LastLoginAt, &total); err != nil {
+			return nil, 0, err
+		}
+		users = append(users, u)
+	}
+	return users, total, rows.Err()
+}
+
+// UsersByIDs resolves a batch of user ids (unknown or malformed ids are skipped).
+func (s *Store) UsersByIDs(ctx context.Context, ids []string) ([]User, error) {
+	rows, err := s.db.Query(ctx, `SELECT `+userColumns+` FROM users WHERE id::text = ANY($1::text[])`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	users := []User{}
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
 // --------------------------------------------------------------- admins ---
 
 type Admin struct {

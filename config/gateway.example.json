@@ -17,7 +17,7 @@
   },
 
   "jwt": {
-    "jwksUrl": "http://localhost:7001/.well-known/jwks.json",
+    "jwksUrl": "http://127.0.0.1:7001/.well-known/jwks.json",
     "issuer": "aerotrack-auth",
     "userAudience": "aerotrack-user",
     "adminAudience": "aerotrack-admin"
@@ -40,18 +40,18 @@
     "path": "/ws",
     "maxFlightsPerClient": 5,
     "sameAirlineOnly": true,
-    "watchUrl": "http://localhost:7002/flights/watch",
+    "watchUrl": "http://127.0.0.1:7002/flights/watch",
     "heartbeatSeconds": 30,
     "maxMessagesPer10s": 20
   },
 
   "routes": [
-    { "prefix": "/api/auth",          "target": "http://localhost:7001", "access": "public" },
-    { "prefix": "/api/account",       "target": "http://localhost:7001", "access": "user" },
-    { "prefix": "/api/admin/auth",    "target": "http://localhost:7001", "access": "public" },
-    { "prefix": "/api/admin/account", "target": "http://localhost:7001", "access": "admin", "allowPendingPasswordChange": true },
-    { "prefix": "/api/airlines",   "target": "http://localhost:7002", "access": "user" },
-    { "prefix": "/api/flights",    "target": "http://localhost:7002", "access": "user" },
-    { "prefix": "/api/admin",      "target": "http://localhost:7003", "access": "admin" }
+    { "prefix": "/api/auth",          "target": "http://127.0.0.1:7001", "access": "public" },
+    { "prefix": "/api/account",       "target": "http://127.0.0.1:7001", "access": "user" },
+    { "prefix": "/api/admin/auth",    "target": "http://127.0.0.1:7001", "access": "public" },
+    { "prefix": "/api/admin/account", "target": "http://127.0.0.1:7001", "access": "admin", "allowPendingPasswordChange": true },
+    { "prefix": "/api/airlines",   "target": "http://127.0.0.1:7002", "access": "user" },
+    { "prefix": "/api/flights",    "target": "http://127.0.0.1:7002", "access": "user" },
+    { "prefix": "/api/admin",      "target": "http://127.0.0.1:7003", "access": "admin" }
   ]
 }

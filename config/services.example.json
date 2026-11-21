@@ -109,9 +109,17 @@
     "db": { "schema": "analytics", "user": "analytics_svc", "password": "CHANGE_ME" },
     "secretKeyBase": "CHANGE_ME",
     "calls": {
-      "prometheus": "http://localhost:9090",
-      "auth": "http://localhost:7001",
-      "tracking": "http://localhost:7002"
+      "prometheus": "http://127.0.0.1:9090",
+      "auth": "http://127.0.0.1:7001",
+      "tracking": "http://127.0.0.1:7002",
+      "timeoutSeconds": 5
+    },
+    "streams": {
+      "auth": "events:auth",
+      "tracking": "events:tracking",
+      "group": "analytics",
+      "batchSize": 500,
+      "blockMs": 5000
     }
   }
 }

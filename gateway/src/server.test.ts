@@ -102,6 +102,20 @@ describe('access guard', () => {
   });
 });
 
+describe('upstream failures', () => {
+  it('answers 503 with a JSON message when the upstream is unreachable', async () => {
+    const keys = await testKeys();
+    const down = await buildServer(testConfig('http://127.0.0.1:1'), redis, { keySet: keys.keySet, bus: new MemoryPositionBus(), logger: false });
+    try {
+      const res = await down.inject({ method: 'GET', url: '/api/airlines', headers: { authorization: `Bearer ${await keys.sign(USER_AUD)}` } });
+      assert.equal(res.statusCode, 503);
+      assert.equal(res.json().error, 'unavailable');
+    } finally {
+      await down.close();
+    }
+  });
+});
+
 describe('csrf protection', () => {
   it('rejects mutating API requests without the CSRF header', async () => {
     const res = await app.inject({ method: 'POST', url: '/api/auth/refresh' });

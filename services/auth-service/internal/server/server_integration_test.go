@@ -329,4 +329,26 @@ func TestGitHubLoginFlow(t *testing.T) {
 	if body["login"] != fmt.Sprintf("it-user-%d", profileID) || body["email"] != "it@example.com" {
 		t.Fatalf("unexpected profile %v (email should fall back to primary verified)", body)
 	}
+
+	// Internal endpoints used by analytics-service.
+	res, body = h.do(req{method: "GET", path: "/internal/users/summary"})
+	expectStatus(t, res, http.StatusOK, "users summary")
+	if users := body["users"].(map[string]any); users["total"].(float64) < 1 || users["activeToday"].(float64) < 1 {
+		t.Fatalf("summary should count the new user: %v", body)
+	}
+	if body["signedInUserSessions"].(float64) < 1 {
+		t.Fatalf("summary should count the new session: %v", body)
+	}
+	res, body = h.do(req{method: "GET", path: fmt.Sprintf("/internal/users?search=it-user-%d", profileID)})
+	expectStatus(t, res, http.StatusOK, "users search")
+	if body["total"].(float64) != 1 {
+		t.Fatalf("search should find exactly the new user: %v", body)
+	}
+	res, body = h.do(req{method: "GET", path: "/internal/users?ids=" + claims.Subject + ",not-a-uuid"})
+	expectStatus(t, res, http.StatusOK, "users by ids")
+	if body["total"].(float64) != 1 {
+		t.Fatalf("ids lookup should resolve the one valid id: %v", body)
+	}
+	res, _ = h.do(req{method: "GET", path: "/internal/users/summary", noInternal: true})
+	expectStatus(t, res, http.StatusUnauthorized, "internal endpoints need the internal token")
 }

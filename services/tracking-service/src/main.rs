@@ -13,7 +13,7 @@ mod providers;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use metrics_exporter_prometheus::PrometheusBuilder;
+use metrics_exporter_prometheus::{Matcher, PrometheusBuilder};
 use tokio::net::TcpListener;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
@@ -41,7 +41,24 @@ async fn run() -> Result<()> {
         warn!("{w}");
     }
 
-    let metrics = PrometheusBuilder::new().install_recorder().context("install prometheus recorder")?;
+    // Histograms (not summaries) so p95 latency can be aggregated the same way for every service.
+    let metrics = PrometheusBuilder::new()
+        .set_buckets_for_metric(
+            Matcher::Full("http_request_duration_seconds".into()),
+            &[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
+        )
+        .context("configure latency buckets")?
+        .install_recorder()
+        .context("install prometheus recorder")?;
+    // process_cpu_seconds_total / process_resident_memory_bytes, like the other services.
+    let process = metrics_process::Collector::default();
+    process.describe();
+    tokio::spawn(async move {
+        loop {
+            process.collect();
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        }
+    });
 
     let pool = db::connect(&cfg).await?;
     db::migrate(&pool).await?;

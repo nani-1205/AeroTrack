@@ -1,10 +1,14 @@
 #!/usr/bin/env ruby
-# Service entrypoint: wait for Postgres -> apply pending migrations -> serve HTTP.
+# Service entrypoint: wait for Postgres -> apply pending migrations -> start the event
+# consumer -> serve HTTP.
 require_relative "../config/environment"
 require_relative "../lib/startup"
 
 Startup.wait_for_database!
 Startup.migrate!
+
+consumer = EventConsumer.new(redis_options: AnalyticsService.redis_options, streams: ServiceConfig.streams, logger: Rails.logger).start
+at_exit { consumer.stop }
 
 require "puma/cli"
 Puma::CLI.new(["--config", File.expand_path("../config/puma.rb", __dir__)]).run

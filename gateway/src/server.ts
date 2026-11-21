@@ -10,7 +10,10 @@ import type { JWTVerifyGetKey } from 'jose';
 import { createAccessGuard, createTokenVerifier } from './auth.js';
 import type { GatewayConfig } from './config.js';
 import { type PositionBus, RedisPositionBus } from './live/bus.js';
-import { registerLiveSocket } from './live/socket.js';
+import { type TrackingEvents, registerLiveSocket } from './live/socket.js';
+
+/** Contract with analytics-service. */
+export const TRACKING_EVENTS_STREAM = 'events:tracking';
 import { registerMetricsHooks } from './metrics.js';
 
 /** Headers only the gateway may set — always stripped from client requests. */
@@ -22,6 +25,8 @@ export interface BuildOptions {
   keySet?: JWTVerifyGetKey;
   /** Override the live position bus (tests). Defaults to Redis pub/sub on a dedicated connection. */
   bus?: PositionBus;
+  /** Override the analytics event sink (tests). Defaults to the Redis stream `events:tracking`. */
+  events?: TrackingEvents;
   logger?: boolean;
 }
 
@@ -91,8 +96,15 @@ export async function buildServer(cfg: GatewayConfig, redis: Redis, opts: BuildO
     app.addHook('onClose', async () => void (await subscriber.quit().catch(() => undefined)));
     bus = new RedisPositionBus(subscriber);
   }
+  const events: TrackingEvents = opts.events ?? {
+    publish: (fields) => {
+      redis
+        .xadd(TRACKING_EVENTS_STREAM, 'MAXLEN', '~', '100000', '*', ...Object.entries(fields).flat())
+        .catch((err: Error) => app.log.warn({ err }, 'publish tracking event failed'));
+    },
+  };
   await app.register(websocket, { options: { maxPayload: 4 * 1024 } });
-  registerLiveSocket(app, { cfg, verifier, bus });
+  registerLiveSocket(app, { cfg, verifier, bus, events });
 
   // --- proxied API routes (from config/gateway.json) -----------------------------
   const guard = createAccessGuard(verifier);
@@ -103,6 +115,15 @@ export async function buildServer(cfg: GatewayConfig, redis: Redis, opts: BuildO
       rewritePrefix: route.prefix.replace(/^\/api/, ''),
       preHandler: guard(route),
       replyOptions: {
+        // An unreachable upstream is "service unavailable" (503) or a timeout (504) — not a
+        // gateway bug (the library's default answers 500 for e.g. ECONNREFUSED).
+        onError: (reply, { error }) => {
+          const timeout = (error as { statusCode?: number }).statusCode === 504;
+          reply.log.warn({ err: error, upstream: route.target }, 'upstream unavailable');
+          void reply
+            .code(timeout ? 504 : 503)
+            .send({ error: timeout ? 'timeout' : 'unavailable', message: 'This service is temporarily unavailable. Please try again shortly.' });
+        },
         rewriteRequestHeaders: (req, headers) => {
           const request = req as FastifyRequest;
           const out: Record<string, string | string[] | undefined> = { ...headers };

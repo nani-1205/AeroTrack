@@ -93,6 +93,10 @@ func New(d Deps) http.Handler {
 	mux.HandleFunc("GET /admin/account/me", s.internal(s.requireRole(token.RoleAdmin, s.adminMe)))
 	mux.HandleFunc("POST /admin/account/password", s.internal(s.requireRole(token.RoleAdmin, s.adminChangePassword)))
 
+	// Service-to-service (analytics-service); not exposed by the gateway.
+	mux.HandleFunc("GET /internal/users/summary", s.internal(s.usersSummary))
+	mux.HandleFunc("GET /internal/users", s.internal(s.listUsers))
+
 	return instrument(mux)
 }
 

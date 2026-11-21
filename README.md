@@ -172,6 +172,34 @@ All values are in SI units: metres, m/s and degrees.
 - **Close codes:** `4401` means unauthenticated or the token expired; the client refreshes its session and reconnects automatically. `4403` means a foreign origin, `4400` a bad frame, `4429` too many messages.
 - **Reconnecting:** after network drops the client reconnects with backoff (1 s → 30 s) and re-subscribes.
 
+## Admin console & analytics (analytics-service)
+
+**Pages:**
+- **Overview:** users signed in now, registered users, aircraft tracked now, live-map viewers; an activity chart (sign-ins, tracking sessions, sign-ups); most-tracked airlines and flights; top trackers; a recent-activity feed; service health; and failed admin sign-ins.
+- **Users:** a searchable, paginated directory with each user's tracking activity.
+- **Performance:** per service, the status, requests/s, error rate, p95 latency, CPU and memory, plus request-rate and p95 charts.
+
+Every chart has a table view, and one time-range filter scopes the whole page.
+
+**Data flow:**
+
+| Source | How it reaches analytics |
+|---|---|
+| auth-service | Redis stream `events:auth` (sign-ups, sign-ins, failed admin sign-ins, lockouts, password changes) |
+| gateway | Redis stream `events:tracking`: one `track.start` per live-tracking subscription (user, airline, flights) |
+| auth-service internal API | `GET /internal/users/summary` and `GET /internal/users` (internal token only; the gateway does **not** route these) |
+| tracking-service | `GET /airlines` for the current number of aircraft and airlines |
+| Prometheus | `up`, `http_requests_total` (Rails: `http_server_requests_total`), latency histograms, `process_cpu_seconds_total`, `process_resident_memory_bytes`, `gateway_ws_connections` |
+
+- **Ingestion:** a Redis **consumer group** (`analytics`) reads both streams into `analytics.auth_events` and `analytics.tracking_events`.
+  - Delivery is at-least-once, and the unique stream id makes inserts idempotent.
+  - The group starts at id 0, so events that were already in the streams are back-filled on first start.
+- **Settings:** stream names and batch sizes live under `analytics.streams` in `services.json`.
+
+**API**, behind the admin JWT: `GET /api/admin/overview`, `/activity?range=24h|7d|30d`, `/top?range=…`, `/users?search=&limit=&offset=`, `/events?limit=`, `/performance?range=1h|6h|24h`.
+
+> **Service-to-service URLs use `127.0.0.1`, not `localhost`.** On Windows, `localhost` resolves to IPv6 `::1` first, and calling an IPv4-only listener that way costs about 2 s per call. Measured before the fix: the admin overview took about 4.2 s. After: about 100 ms. Browser-facing URLs (the portals, the GitHub callback) keep `localhost`.
+
 ## Gateway security model
 
 - JWTs are verified against the auth-service JWKS (RS256). **User and admin tokens have different audiences**, so a user token can never open `/api/admin/*`.
@@ -184,6 +212,7 @@ All values are in SI units: metres, m/s and degrees.
 ```sh
 (cd services/auth-service && go test ./...)   # unit + integration (needs `npm run infra:up`; uses Redis DB 15, cleans up its rows)
 (cd services/tracking-service && cargo test)  # geo, parsers, simulator, selection rules + API/live-store integration (Redis DB 15)
+(cd services/analytics-service && ruby test/event_consumer_test.rb)  # stream-entry parsing
 npm --prefix gateway test                     # access guard, audiences, CSRF, trusted headers, live WebSocket (real sockets)
 npm --prefix frontend run test:all            # interceptors, both portals, flight selection (max 5), live socket client, formatting, dead reckoning
 ```
@@ -194,5 +223,5 @@ npm --prefix frontend run test:all            # interceptors, both portals, flig
 - [x] **Phase 1**: auth (GitHub SSO users, admin username/password with argon2id and lockout, JWT/JWKS, refresh sessions)
 - [x] **Phase 2**: tracking backend (airline seed data, OpenSky / adsb.lol / simulator providers, Redis live state, pub/sub)
 - [x] **Phase 3**: user portal (airlines → active flights → live map, 1–5 flights of the same airline, WebSocket)
-- [ ] **Phase 4**: analytics service and admin dashboard (signed-in users, usage, system performance)
+- [x] **Phase 4**: analytics service and admin dashboard (signed-in users, usage, system performance)
 - [ ] **Phase 5**: tests, Dockerfiles, CI, hardening

@@ -1,7 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Icon, Logo } from '@aerotrack/shared';
-import { KeyRound, LayoutDashboard, LogOut } from 'lucide';
+import { Activity, KeyRound, LayoutDashboard, LogOut, Users } from 'lucide';
 import { AdminAuthService } from './core/admin-auth.service';
 
 @Component({
@@ -18,5 +18,9 @@ export class App {
     const admin = this.auth.admin();
     return !!admin && !admin.mustChangePassword;
   });
-  protected readonly navigation = [{ path: '/', label: 'Overview', icon: LayoutDashboard, exact: true }];
+  protected readonly navigation = [
+    { path: '/', label: 'Overview', icon: LayoutDashboard, exact: true },
+    { path: '/users', label: 'Users', icon: Users, exact: false },
+    { path: '/performance', label: 'Performance', icon: Activity, exact: false },
+  ];
 }

@@ -12,3 +12,5 @@ gem "prometheus-client", "~> 4.2"
 
 # Windows has no system zoneinfo database.
 gem "tzinfo-data", platforms: %i[windows jruby]
+# Process memory on Windows (psapi) — a bundled, not default, gem since Ruby 3.5.
+gem "fiddle", platforms: %i[windows]

@@ -17,6 +17,7 @@ let redis: Redis;
 let bus: MemoryPositionBus;
 let userToken: string;
 let wsUrl: string;
+const published: Record<string, string>[] = [];
 
 before(async () => {
   upstream = createServer((req, res) => {
@@ -51,7 +52,12 @@ before(async () => {
   bus = new MemoryPositionBus();
   redis = new Redis({ host: '127.0.0.1', port: 1, lazyConnect: true, enableOfflineQueue: false, retryStrategy: () => null });
   redis.on('error', () => {});
-  app = await buildServer(testConfig(target), redis, { keySet: keys.keySet, bus, logger: false });
+  app = await buildServer(testConfig(target), redis, {
+    keySet: keys.keySet,
+    bus,
+    events: { publish: (fields) => published.push(fields) },
+    logger: false,
+  });
   // Real sockets (not injectWS): disconnect handling must be exercised over an actual connection.
   const address = await app.listen({ host: '127.0.0.1', port: 0 });
   wsUrl = `${address.replace('http', 'ws')}/ws`;
@@ -119,6 +125,11 @@ describe('live tracking socket', () => {
     assert.equal(watchCalls[0]?.headers['x-user-id'], 'subject-1');
     assert.equal(watchCalls[0]?.headers['x-internal-token'], 'internal-secret');
     assert.equal(bus.listeners('trk:pos:AIC'), 1);
+    const event = published.at(-1);
+    assert.equal(event?.['type'], 'track.start', 'a usage event is published for analytics');
+    assert.equal(event?.['userId'], 'subject-1');
+    assert.equal(event?.['airline'], 'AIC');
+    assert.deepEqual(JSON.parse(event?.['callsigns'] ?? '[]'), ['AIC1', 'AIC1']);
 
     bus.publish('trk:pos:AIC', {
       airline: 'AIC', ts: 100, removed: [],

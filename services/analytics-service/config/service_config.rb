@@ -14,7 +14,8 @@ module ServiceConfig
     %w[shared internalToken],
     %w[analytics listen], %w[analytics secretKeyBase],
     %w[analytics db schema], %w[analytics db user], %w[analytics db password],
-    %w[analytics calls prometheus]
+    %w[analytics calls prometheus], %w[analytics calls auth], %w[analytics calls tracking],
+    %w[analytics streams auth], %w[analytics streams tracking], %w[analytics streams group]
   ].freeze
 
   class Error < StandardError; end
@@ -34,6 +35,9 @@ module ServiceConfig
     def postgres = shared.fetch("postgres")
     def redis = shared.fetch("redis")
     def db = analytics.fetch("db")
+    def calls = analytics.fetch("calls")
+    def streams = analytics.fetch("streams")
+    def internal_token = shared.fetch("internalToken")
 
     def listen_host = analytics.fetch("listen").rpartition(":").first
     def listen_port = Integer(analytics.fetch("listen").rpartition(":").last)

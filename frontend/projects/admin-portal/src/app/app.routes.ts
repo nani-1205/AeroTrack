@@ -18,8 +18,20 @@ export const routes: Routes = [
     path: '',
     pathMatch: 'full',
     canActivate: [adminGuard],
-    title: 'AeroTrack Admin',
+    title: 'Overview · AeroTrack Admin',
     loadComponent: () => import('./pages/dashboard/dashboard').then((m) => m.DashboardPage),
+  },
+  {
+    path: 'users',
+    canActivate: [adminGuard],
+    title: 'Users · AeroTrack Admin',
+    loadComponent: () => import('./pages/users/users').then((m) => m.UsersPage),
+  },
+  {
+    path: 'performance',
+    canActivate: [adminGuard],
+    title: 'System performance · AeroTrack Admin',
+    loadComponent: () => import('./pages/performance/performance').then((m) => m.PerformancePage),
   },
   { path: '**', redirectTo: '' },
 ];
