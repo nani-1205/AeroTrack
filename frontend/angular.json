@@ -29,7 +29,7 @@
                 "input": "projects/user-portal/public"
               }
             ],
-            "styles": ["projects/user-portal/src/styles.scss"]
+            "styles": ["node_modules/maplibre-gl/dist/maplibre-gl.css", "projects/user-portal/src/styles.scss"]
           },
           "configurations": {
             "production": {

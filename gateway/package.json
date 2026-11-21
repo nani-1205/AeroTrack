@@ -20,6 +20,7 @@
     "@fastify/cors": "^11.4.3",
     "@fastify/http-proxy": "^11.6.10",
     "@fastify/rate-limit": "^11.3.0",
+    "@fastify/websocket": "^11.3.7",
     "fastify": "^5.12.8",
     "ioredis": "^6.0.0",
     "jose": "^6.2.18",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

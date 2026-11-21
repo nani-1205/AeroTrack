@@ -103,3 +103,68 @@ body {
 .intro p { margin: 0; color: var(--muted); }
 
 .muted { color: var(--muted); }
+
+// ---------------------------------------------------------------- page chrome
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  h1 { margin: 0.15rem 0 0; font-size: 1.5rem; }
+  p { margin: 0.25rem 0 0; color: var(--muted); }
+}
+
+.breadcrumb {
+  font-size: 0.85rem;
+  color: var(--muted);
+  a { color: var(--focus); text-decoration: none; &:hover { text-decoration: underline; } }
+}
+
+.search {
+  font: inherit;
+  width: min(100%, 22rem);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  &:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border-color: var(--focus); }
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #dafbe1;
+  color: var(--ok);
+  &.off { background: #eaeef2; color: var(--muted); }
+  &.warn { background: #fff8c5; color: #9a6700; }
+  &.bad { background: var(--danger-bg); color: var(--danger); }
+}
+
+.empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+// --------------------------------------------------------------------- tables
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  th, td { padding: 0.55rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); background: var(--page); }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: #f6f8fa; }
+  tr.selected { background: #ddf4ff; &:hover { background: #ddf4ff; } }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+}
+
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.btn-sm { padding: 0.3rem 0.65rem; font-size: 0.85rem; }

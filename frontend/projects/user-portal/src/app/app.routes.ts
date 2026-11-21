@@ -12,8 +12,20 @@ export const routes: Routes = [
     path: '',
     pathMatch: 'full',
     canActivate: [authGuard],
-    title: 'AeroTrack',
-    loadComponent: () => import('./pages/home/home').then((m) => m.HomePage),
+    title: 'Airlines · AeroTrack',
+    loadComponent: () => import('./pages/airlines/airlines').then((m) => m.AirlinesPage),
+  },
+  {
+    path: 'airlines/:icao',
+    canActivate: [authGuard],
+    title: 'Active flights · AeroTrack',
+    loadComponent: () => import('./pages/flights/flights').then((m) => m.FlightsPage),
+  },
+  {
+    path: 'track',
+    canActivate: [authGuard],
+    title: 'Live tracking · AeroTrack',
+    loadComponent: () => import('./pages/track/track').then((m) => m.TrackPage),
   },
   { path: '**', redirectTo: '' },
 ];

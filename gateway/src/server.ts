@@ -3,11 +3,14 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import proxy from '@fastify/http-proxy';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import Fastify, { type FastifyRequest } from 'fastify';
 import type { Redis } from 'ioredis';
 import type { JWTVerifyGetKey } from 'jose';
-import { createAccessGuard } from './auth.js';
+import { createAccessGuard, createTokenVerifier } from './auth.js';
 import type { GatewayConfig } from './config.js';
+import { type PositionBus, RedisPositionBus } from './live/bus.js';
+import { registerLiveSocket } from './live/socket.js';
 import { registerMetricsHooks } from './metrics.js';
 
 /** Headers only the gateway may set — always stripped from client requests. */
@@ -17,6 +20,8 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export interface BuildOptions {
   /** Override JWKS lookup (tests). Defaults to the auth-service JWKS URL from config. */
   keySet?: JWTVerifyGetKey;
+  /** Override the live position bus (tests). Defaults to Redis pub/sub on a dedicated connection. */
+  bus?: PositionBus;
   logger?: boolean;
 }
 
@@ -36,6 +41,7 @@ export async function buildServer(cfg: GatewayConfig, redis: Redis, opts: BuildO
     redis,
     nameSpace: 'gw:ratelimit:',
     skipOnError: true, // never take the API down because Redis blipped
+    keyGenerator: (req) => req.ip ?? 'unknown', // injected/odd requests may lack a socket address
     allowList: (req) => req.url.startsWith('/health') || req.url === '/metrics',
   });
   registerMetricsHooks(app);
@@ -75,8 +81,21 @@ export async function buildServer(cfg: GatewayConfig, redis: Redis, opts: BuildO
     });
   }
 
+  const verifier = createTokenVerifier(cfg, opts.keySet);
+
+  // --- live tracking WebSocket ---------------------------------------------------
+  let bus = opts.bus;
+  if (!bus) {
+    const subscriber = redis.duplicate({ connectionName: 'gateway-live' });
+    subscriber.on('error', (err: Error) => app.log.error({ err }, 'live position subscriber error'));
+    app.addHook('onClose', async () => void (await subscriber.quit().catch(() => undefined)));
+    bus = new RedisPositionBus(subscriber);
+  }
+  await app.register(websocket, { options: { maxPayload: 4 * 1024 } });
+  registerLiveSocket(app, { cfg, verifier, bus });
+
   // --- proxied API routes (from config/gateway.json) -----------------------------
-  const guard = createAccessGuard(cfg, opts.keySet);
+  const guard = createAccessGuard(verifier);
   for (const route of cfg.routes) {
     await app.register(proxy, {
       upstream: route.target,

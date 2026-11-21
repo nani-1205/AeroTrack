@@ -39,7 +39,10 @@
   "websocket": {
     "path": "/ws",
     "maxFlightsPerClient": 5,
-    "sameAirlineOnly": true
+    "sameAirlineOnly": true,
+    "watchUrl": "http://localhost:7002/flights/watch",
+    "heartbeatSeconds": 30,
+    "maxMessagesPer10s": 20
   },
 
   "routes": [

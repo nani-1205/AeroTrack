@@ -22,6 +22,9 @@ services/analytics-service/log/
 services/analytics-service/tmp/
 services/analytics-service/vendor/bundle/
 
+# --- Local backup of the assistant's project memory/state (never commit) ---
+.memory-backup/
+
 # --- Misc ---
 *.log
 .DS_Store

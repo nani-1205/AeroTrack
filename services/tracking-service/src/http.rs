@@ -51,18 +51,28 @@ pub fn router(state: AppState) -> Router {
 
 // ------------------------------------------------------------------ errors
 
-pub struct ApiError(StatusCode, &'static str, String);
+pub struct ApiError(StatusCode, &'static str, String, Option<(&'static str, serde_json::Value)>);
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.0, Json(json!({ "error": self.1, "message": self.2 }))).into_response()
+        let mut body = json!({ "error": self.1, "message": self.2 });
+        if let Some((key, value)) = self.3 {
+            body[key] = value;
+        }
+        (self.0, Json(body)).into_response()
+    }
+}
+
+impl ApiError {
+    fn new(status: StatusCode, code: &'static str, message: impl Into<String>) -> Self {
+        Self(status, code, message.into(), None)
     }
 }
 
 impl From<anyhow::Error> for ApiError {
     fn from(e: anyhow::Error) -> Self {
         tracing::error!(error = format!("{e:#}"), "request failed");
-        ApiError(StatusCode::SERVICE_UNAVAILABLE, "unavailable", "live data temporarily unavailable".into())
+        ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "unavailable", "live data temporarily unavailable")
     }
 }
 
@@ -73,7 +83,7 @@ impl From<redis::RedisError> for ApiError {
 }
 
 fn not_found(what: &str) -> ApiError {
-    ApiError(StatusCode::NOT_FOUND, "not_found", format!("{what} not found"))
+    ApiError::new(StatusCode::NOT_FOUND, "not_found", format!("{what} not found"))
 }
 
 type ApiResult<T> = Result<Json<T>, ApiError>;
@@ -87,7 +97,7 @@ async fn require_internal(State(s): State<AppState>, req: Request, next: Next) -
         .and_then(|v| v.to_str().ok())
         .is_some_and(|got| constant_time_eq(got.as_bytes(), s.cfg.shared.internal_token.as_bytes()));
     if !ok {
-        return ApiError(StatusCode::UNAUTHORIZED, "unauthorized", "requests must come through the gateway".into()).into_response();
+        return ApiError::new(StatusCode::UNAUTHORIZED, "unauthorized", "requests must come through the gateway").into_response();
     }
     next.run(req).await
 }
@@ -239,15 +249,15 @@ async fn watch_flights(State(s): State<AppState>, Json(req): Json<WatchRequest>)
 
 fn selection_error(e: SelectionError) -> ApiError {
     match e {
-        SelectionError::Count { max, got } => ApiError(
+        SelectionError::Count { max, got } => ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "invalid_selection",
             format!("select between 1 and {max} flights (got {got})"),
         ),
         SelectionError::NotActive(ids) => {
-            ApiError(StatusCode::NOT_FOUND, "not_active", format!("not active any more: {}", ids.join(", ")))
+            ApiError(StatusCode::NOT_FOUND, "not_active", format!("not active any more: {}", ids.join(", ")), Some(("inactive", json!(ids))))
         }
-        SelectionError::MixedAirlines(codes) => ApiError(
+        SelectionError::MixedAirlines(codes) => ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "mixed_airlines",
             format!("all selected flights must belong to the same airline (got {})", codes.join(", ")),
@@ -407,6 +417,7 @@ mod tests {
 
         let (status, body) = h.call("POST", "/flights/watch", Some(json!({ "icao24": ["ffffff"] })), true).await;
         assert_eq!((status, body["error"].as_str()), (StatusCode::NOT_FOUND, Some("not_active")));
+        assert_eq!(body["inactive"], json!(["ffffff"]), "lists which flights are gone so the gateway can drop just those");
 
         // Nothing seen for longer than staleAfterSeconds → flights and counts disappear.
         let later = now + h.state.cfg.tracking.stale_after_seconds as i64 + 1;

@@ -52,7 +52,12 @@ export const GatewayConfigSchema = z
     websocket: z.object({
       path: z.string().startsWith('/'),
       maxFlightsPerClient: z.number().int().min(1).max(5),
+      /** Enforced by tracking-service (POST /flights/watch); kept here for documentation. */
       sameAirlineOnly: z.boolean(),
+      /** tracking-service endpoint that validates a selection and keeps it watched. */
+      watchUrl: z.url(),
+      heartbeatSeconds: z.number().int().min(5).max(300),
+      maxMessagesPer10s: z.number().int().min(1).max(1000),
     }),
     routes: z.array(RouteSchema).min(1),
   })

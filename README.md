@@ -146,6 +146,32 @@ All values are in SI units: metres, m/s and degrees.
 
 **Scaling:** only the instance holding the Redis lock `trk:ingest:leader` ingests data, so any number of replicas can serve the API.
 
+## User portal: from airline to live map
+
+1. **Airlines** (`/`): airlines with flights in the air, busiest first, refreshed every 30 s. You can search by name, ICAO or IATA code.
+2. **Active flights** (`/airlines/{ICAO}`): a table of the airline's airborne flights showing route, altitude, speed, heading, aircraft and time airborne, refreshed every 20 s.
+   - Tick **up to 5** flights; the other checkboxes lock once 5 are picked.
+   - Then choose **Track live**, or use the row's **Track** button for a single flight.
+3. **Live tracking** (`/track?ids=…`):
+   - A MapLibre map with an OpenFreeMap basemap (free, OpenStreetMap data, no API key).
+   - One colour per flight, with the plane icon rotated to its heading and a trail.
+   - Between updates, aircraft are moved forward along their heading at their speed (at most 120 s ahead), so the map stays smooth even on a 90 s OpenSky feed.
+   - The side panel shows altitude, speed, heading, climb rate, aircraft/registration, time airborne and last update.
+   - When a flight lands it is marked *no longer reported*.
+
+**Live WebSocket** (`/ws` on the gateway; the dev server proxies it):
+
+| Direction | Frame |
+|---|---|
+| client → gateway | `{type:"subscribe", icao24:[1–5 ids]}`, `{type:"unsubscribe"}`, `{type:"ping"}` |
+| gateway → client | `ready`, `subscribed {airline, flights, watchTtlSeconds}`, `positions {ts, flights, removed}`, `ended`, `error {error, message}`, `pong` |
+
+- **Authentication:** the user's access cookie, plus an `Origin` check against `cors.origins`.
+- **Validation:** selections go through tracking-service `POST /flights/watch` (1–5 flights, one airline). That call is repeated every `watchTtlSeconds/2` while subscribed.
+- **Delivery:** only the subscribed flights are relayed from `trk:pos:{ICAO}`.
+- **Close codes:** `4401` means unauthenticated or the token expired; the client refreshes its session and reconnects automatically. `4403` means a foreign origin, `4400` a bad frame, `4429` too many messages.
+- **Reconnecting:** after network drops the client reconnects with backoff (1 s → 30 s) and re-subscribes.
+
 ## Gateway security model
 
 - JWTs are verified against the auth-service JWKS (RS256). **User and admin tokens have different audiences**, so a user token can never open `/api/admin/*`.
@@ -158,8 +184,8 @@ All values are in SI units: metres, m/s and degrees.
 ```sh
 (cd services/auth-service && go test ./...)   # unit + integration (needs `npm run infra:up`; uses Redis DB 15, cleans up its rows)
 (cd services/tracking-service && cargo test)  # geo, parsers, simulator, selection rules + API/live-store integration (Redis DB 15)
-npm --prefix gateway test                     # access guard, audiences, CSRF, trusted headers
-npm --prefix frontend run test:all            # shared interceptors, both portals
+npm --prefix gateway test                     # access guard, audiences, CSRF, trusted headers, live WebSocket (real sockets)
+npm --prefix frontend run test:all            # interceptors, both portals, flight selection (max 5), live socket client, formatting, dead reckoning
 ```
 
 ## Roadmap
@@ -167,6 +193,6 @@ npm --prefix frontend run test:all            # shared interceptors, both portal
 - [x] **Phase 0**: scaffold, config files, docker-compose, startup migrations, health checks and metrics everywhere
 - [x] **Phase 1**: auth (GitHub SSO users, admin username/password with argon2id and lockout, JWT/JWKS, refresh sessions)
 - [x] **Phase 2**: tracking backend (airline seed data, OpenSky / adsb.lol / simulator providers, Redis live state, pub/sub)
-- [ ] **Phase 3**: user portal (airlines → active flights → live map, 1–5 flights of the same airline, WebSocket)
+- [x] **Phase 3**: user portal (airlines → active flights → live map, 1–5 flights of the same airline, WebSocket)
 - [ ] **Phase 4**: analytics service and admin dashboard (signed-in users, usage, system performance)
 - [ ] **Phase 5**: tests, Dockerfiles, CI, hardening

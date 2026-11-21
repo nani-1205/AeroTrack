@@ -4,13 +4,10 @@ import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { Redis } from 'ioredis';
-import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose';
-import { GatewayConfigSchema, type GatewayConfig } from './config.js';
+import { MemoryPositionBus } from './live/bus.js';
 import { buildServer } from './server.js';
+import { ADMIN_AUD, USER_AUD, testConfig, testKeys } from './test-support.js';
 
-const ISSUER = 'aerotrack-auth';
-const USER_AUD = 'aerotrack-user';
-const ADMIN_AUD = 'aerotrack-admin';
 const CSRF = { 'x-requested-with': 'aerotrack' };
 
 let upstream: Server;
@@ -19,18 +16,7 @@ let lastUpstream: { url: string; headers: IncomingHttpHeaders } | null = null;
 const seen = () => lastUpstream;
 let app: FastifyInstance;
 let redis: Redis;
-let privateKey: CryptoKey;
-
-async function sign(aud: string, claims: Record<string, unknown> = {}, expiresIn = '5m') {
-  return new SignJWT({ sid: 'sess-1', ...claims })
-    .setProtectedHeader({ alg: 'RS256', kid: 'test' })
-    .setIssuer(ISSUER)
-    .setAudience(aud)
-    .setSubject('subject-1')
-    .setIssuedAt()
-    .setExpirationTime(expiresIn)
-    .sign(privateKey);
-}
+let sign: Awaited<ReturnType<typeof testKeys>>['sign'];
 
 before(async () => {
   upstream = createServer((req, res) => {
@@ -41,36 +27,13 @@ before(async () => {
   await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
   const target = `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`;
 
-  const keys = await generateKeyPair('RS256');
-  privateKey = keys.privateKey;
-  const jwk = { ...(await exportJWK(keys.publicKey)), kid: 'test', alg: 'RS256', use: 'sig' };
-
-  const cfg: GatewayConfig = {
-    ...GatewayConfigSchema.parse({
-      env: 'test',
-      listen: { host: '127.0.0.1', port: 8080 }, // never bound: tests use app.inject()
-      cors: { origins: ['http://localhost:4200'], credentials: true },
-      cookie: { secret: 'test-cookie-secret', secure: false, sameSite: 'lax', accessTokenName: 'aerotrack_at', adminAccessTokenName: 'aerotrack_admin_at' },
-      jwt: { jwksUrl: 'http://127.0.0.1:1/jwks', issuer: ISSUER, userAudience: USER_AUD, adminAudience: ADMIN_AUD },
-      redis: { host: '127.0.0.1', port: 6379, password: 'unused', db: 0 },
-      internalToken: 'internal-secret',
-      csrf: { header: 'x-requested-with', value: 'aerotrack' },
-      rateLimit: { max: 1000, windowSeconds: 60 },
-      websocket: { path: '/ws', maxFlightsPerClient: 5, sameAirlineOnly: true },
-      routes: [
-        { prefix: '/api/auth', target, access: 'public' },
-        { prefix: '/api/airlines', target, access: 'user' },
-        { prefix: '/api/admin/account', target, access: 'admin', allowPendingPasswordChange: true },
-        { prefix: '/api/admin', target, access: 'admin' },
-      ],
-    }),
-    path: 'test',
-  };
+  const keys = await testKeys();
+  sign = keys.sign;
 
   // No Redis in unit tests: commands fail fast and the rate limiter skips on error.
   redis = new Redis({ host: '127.0.0.1', port: 1, lazyConnect: true, enableOfflineQueue: false, retryStrategy: () => null });
   redis.on('error', () => {});
-  app = await buildServer(cfg, redis, { keySet: createLocalJWKSet({ keys: [jwk] }), logger: false });
+  app = await buildServer(testConfig(target), redis, { keySet: keys.keySet, bus: new MemoryPositionBus(), logger: false });
 });
 
 after(async () => {
