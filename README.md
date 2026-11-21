@@ -107,6 +107,45 @@ All secrets and service-to-service call settings live in **two files**. Both are
   - Changing the password signs out all other sessions of that admin.
 - **Auditing and analytics:** every login attempt is written to `auth.login_events` and published to the Redis stream `events:auth`, which feeds analytics in Phase 4. Prometheus gets `auth_logins_total{kind,result}` and `auth_active_sessions{kind}`.
 
+## Live tracking (tracking-service)
+
+**Data sources** (all free and open). Set them in `services.json` → `tracking`:
+
+| Setting | Options | Role |
+|---|---|---|
+| `provider` | `simulator` (default for development), `opensky` | **Global feed.** Decides which flights are active. OpenSky returns every airborne aircraft worldwide in one call. |
+| `watchProvider` | `adsbLol`, `none` | **Fast refresh** of flights users are watching (every `adsbLol.pollIntervalSeconds`, 5 s by default). Adds registration and aircraft type. Only used with `opensky`. |
+
+- **OpenSky budget:** a global poll costs 4 API credits.
+  - Without credentials you get about 400 credits a day, so use `pollIntervalSeconds` ≥ 900.
+  - With a free account (`clientId`/`clientSecret`) you get about 4,000 a day, so use ≥ 90.
+  - The service warns at startup when the interval would exceed the budget, and backs off on HTTP 429.
+- **Matching flights to airlines:** flights are matched by the callsign's ICAO prefix (`UAL1003` belongs to `UAL`). Registrations such as `N123AB` and flights on the ground are ignored.
+- **Catalogue:** the airline catalogue (5,774 airlines) is seeded at startup from OpenFlights data. © OpenFlights contributors, ODbL 1.0; see [seed/README.md](services/tracking-service/seed/README.md).
+
+**API.** The gateway routes these as `/api/...`; all of them require a signed-in user.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/airlines?limit=100` | Airlines that have active flights, busiest first, with `activeFlights` |
+| `GET /api/airlines?search=air india` | Catalogue search by ICAO, IATA or name. Best match first; among equal matches, airlines with live flights first. |
+| `GET /api/airlines/{icao}` | One airline with its live count |
+| `GET /api/airlines/{icao}/flights` | Active flights of that airline, sorted by callsign |
+| `GET /api/flights/{icao24}?trail=true` | One flight, its airline, and the trail `[[lat, lon, altM, unixS], …]` |
+| `POST /api/flights/watch` `{"icao24": [...]}` | Validates **1–5 flights of one airline**. Returns 422 `invalid_selection` / `mixed_airlines` or 404 `not_active`. Marks the flights as watched for `watchTtlSeconds` and returns their current state. |
+
+All values are in SI units: metres, m/s and degrees.
+
+**Redis keys.** The gateway reads these in Phase 3:
+- `trk:f:{icao24}`: flight JSON, with a TTL of `staleAfterSeconds`
+- `trk:a:{ICAO}`: active flights of an airline
+- `trk:counts`: active-flight count per airline
+- `trk:t:{icao24}`: trail
+- `trk:watch`: watched flights
+- pub/sub `trk:pos:{ICAO}`: `{airline, ts, flights[], removed[]}` after every update
+
+**Scaling:** only the instance holding the Redis lock `trk:ingest:leader` ingests data, so any number of replicas can serve the API.
+
 ## Gateway security model
 
 - JWTs are verified against the auth-service JWKS (RS256). **User and admin tokens have different audiences**, so a user token can never open `/api/admin/*`.
@@ -118,6 +157,7 @@ All secrets and service-to-service call settings live in **two files**. Both are
 
 ```sh
 (cd services/auth-service && go test ./...)   # unit + integration (needs `npm run infra:up`; uses Redis DB 15, cleans up its rows)
+(cd services/tracking-service && cargo test)  # geo, parsers, simulator, selection rules + API/live-store integration (Redis DB 15)
 npm --prefix gateway test                     # access guard, audiences, CSRF, trusted headers
 npm --prefix frontend run test:all            # shared interceptors, both portals
 ```
@@ -126,7 +166,7 @@ npm --prefix frontend run test:all            # shared interceptors, both portal
 
 - [x] **Phase 0**: scaffold, config files, docker-compose, startup migrations, health checks and metrics everywhere
 - [x] **Phase 1**: auth (GitHub SSO users, admin username/password with argon2id and lockout, JWT/JWKS, refresh sessions)
-- [ ] **Phase 2**: tracking backend (airline seed data, OpenSky / adsb.lol / simulator providers, Redis live state, pub/sub)
+- [x] **Phase 2**: tracking backend (airline seed data, OpenSky / adsb.lol / simulator providers, Redis live state, pub/sub)
 - [ ] **Phase 3**: user portal (airlines → active flights → live map, 1–5 flights of the same airline, WebSocket)
 - [ ] **Phase 4**: analytics service and admin dashboard (signed-in users, usage, system performance)
 - [ ] **Phase 5**: tests, Dockerfiles, CI, hardening

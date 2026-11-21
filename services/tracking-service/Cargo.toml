@@ -8,12 +8,20 @@ publish = false
 [dependencies]
 anyhow = "1"
 axum = "0.8"
+csv = "1"
 metrics = "0.24"
 metrics-exporter-prometheus = { version = "0.17", default-features = false }
-redis = { version = "0.32", features = ["tokio-comp", "connection-manager"] }
+rand = "0.9"
+redis = { version = "0.32", features = ["tokio-comp", "connection-manager", "script"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "migrate", "macros", "chrono"] }
+thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+futures-util = "0.3"
+tower = { version = "0.5", features = ["util"] }

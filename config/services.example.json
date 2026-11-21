@@ -74,25 +74,34 @@
     "listen": "0.0.0.0:7002",
     "db": { "schema": "tracking", "user": "tracking_svc", "password": "CHANGE_ME" },
     "provider": "simulator",
+    "watchProvider": "adsbLol",
     "calls": {
       "opensky": {
         "baseUrl": "https://opensky-network.org/api",
         "tokenUrl": "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token",
         "clientId": "",
         "clientSecret": "",
-        "pollIntervalSeconds": 60
+        "pollIntervalSeconds": 90,
+        "timeoutSeconds": 30
       },
       "adsbLol": {
         "baseUrl": "https://api.adsb.lol/v2",
-        "pollIntervalSeconds": 5
+        "apiKey": "",
+        "pollIntervalSeconds": 5,
+        "timeoutSeconds": 10,
+        "maxConcurrent": 5
       },
       "simulator": {
+        "airlines": ["AIC", "IGO", "AAL", "DAL", "UAL", "BAW", "DLH", "AFR", "KLM", "UAE", "QTR", "SIA", "THY", "QFA", "ANA"],
         "flightsPerAirline": 20,
-        "tickSeconds": 2
+        "tickSeconds": 2,
+        "seed": 42
       }
     },
     "maxTrackedFlights": 5,
-    "positionRetentionDays": 7
+    "staleAfterSeconds": 300,
+    "watchTtlSeconds": 60,
+    "trail": { "sampleSeconds": 30, "maxPoints": 240 }
   },
 
   "analytics": {
