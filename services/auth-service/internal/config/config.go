@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -60,13 +61,34 @@ type GitHub struct {
 	ClientSecret string   `json:"clientSecret"`
 	CallbackURL  string   `json:"callbackUrl"`
 	Scopes       []string `json:"scopes"`
+	AuthorizeURL string   `json:"authorizeUrl"`
+	TokenURL     string   `json:"tokenUrl"`
+	APIBaseURL   string   `json:"apiBaseUrl"`
 }
+
+// Configured reports whether GitHub SSO credentials are present.
+func (g GitHub) Configured() bool { return g.ClientID != "" && g.ClientSecret != "" }
 
 type Admin struct {
 	BootstrapUsername string `json:"bootstrapUsername"`
 	BootstrapPassword string `json:"bootstrapPassword"`
 	MaxFailedAttempts int    `json:"maxFailedAttempts"`
 	LockoutMinutes    int    `json:"lockoutMinutes"`
+	MinPasswordLength int    `json:"minPasswordLength"`
+}
+
+// Cookies names/paths must match config/gateway.json (cookie.*) and the gateway route prefixes.
+type Cookies struct {
+	Secure           bool   `json:"secure"`
+	SameSite         string `json:"sameSite"`
+	UserAccess       string `json:"userAccess"`
+	UserRefresh      string `json:"userRefresh"`
+	UserRefreshPath  string `json:"userRefreshPath"`
+	AdminAccess      string `json:"adminAccess"`
+	AdminRefresh     string `json:"adminRefresh"`
+	AdminRefreshPath string `json:"adminRefreshPath"`
+	OAuthState       string `json:"oauthState"`
+	OAuthStatePath   string `json:"oauthStatePath"`
 }
 
 type Portals struct {
@@ -82,6 +104,7 @@ type Auth struct {
 	JWTPrivateKeyPath string        `json:"jwtPrivateKeyPath"`
 	JWTPublicKeyPath  string        `json:"jwtPublicKeyPath"`
 	Portals           Portals       `json:"portals"`
+	Cookies           Cookies       `json:"cookies"`
 }
 
 // Config is the slice of services.json this service cares about.
@@ -132,7 +155,7 @@ func Load() (*Config, error) {
 // Warnings lists non-fatal gaps that are acceptable during development.
 func (c *Config) Warnings() []string {
 	var w []string
-	if c.Auth.GitHub.ClientID == "" || c.Auth.GitHub.ClientSecret == "" {
+	if !c.Auth.GitHub.Configured() {
 		w = append(w, "auth.github.clientId/clientSecret are empty — GitHub SSO will not work until set")
 	}
 	return w
@@ -141,22 +164,36 @@ func (c *Config) Warnings() []string {
 func (c *Config) validate() error {
 	var errs []error
 	required := map[string]string{
-		"shared.postgres.host":         c.Shared.Postgres.Host,
-		"shared.postgres.database":     c.Shared.Postgres.Database,
-		"shared.redis.host":            c.Shared.Redis.Host,
-		"shared.redis.password":        c.Shared.Redis.Password,
-		"shared.jwt.issuer":            c.Shared.JWT.Issuer,
-		"shared.jwt.userAudience":      c.Shared.JWT.UserAudience,
-		"shared.jwt.adminAudience":     c.Shared.JWT.AdminAudience,
-		"shared.internalToken":         c.Shared.InternalToken,
-		"auth.listen":                  c.Auth.Listen,
-		"auth.db.schema":               c.Auth.DB.Schema,
-		"auth.db.user":                 c.Auth.DB.User,
-		"auth.db.password":             c.Auth.DB.Password,
-		"auth.admin.bootstrapUsername": c.Auth.Admin.BootstrapUsername,
-		"auth.admin.bootstrapPassword": c.Auth.Admin.BootstrapPassword,
-		"auth.jwtPrivateKeyPath":       c.Auth.JWTPrivateKeyPath,
-		"auth.jwtPublicKeyPath":        c.Auth.JWTPublicKeyPath,
+		"shared.postgres.host":          c.Shared.Postgres.Host,
+		"shared.postgres.database":      c.Shared.Postgres.Database,
+		"shared.redis.host":             c.Shared.Redis.Host,
+		"shared.redis.password":         c.Shared.Redis.Password,
+		"shared.jwt.issuer":             c.Shared.JWT.Issuer,
+		"shared.jwt.userAudience":       c.Shared.JWT.UserAudience,
+		"shared.jwt.adminAudience":      c.Shared.JWT.AdminAudience,
+		"shared.internalToken":          c.Shared.InternalToken,
+		"auth.listen":                   c.Auth.Listen,
+		"auth.db.schema":                c.Auth.DB.Schema,
+		"auth.db.user":                  c.Auth.DB.User,
+		"auth.db.password":              c.Auth.DB.Password,
+		"auth.admin.bootstrapUsername":  c.Auth.Admin.BootstrapUsername,
+		"auth.admin.bootstrapPassword":  c.Auth.Admin.BootstrapPassword,
+		"auth.jwtPrivateKeyPath":        c.Auth.JWTPrivateKeyPath,
+		"auth.jwtPublicKeyPath":         c.Auth.JWTPublicKeyPath,
+		"auth.github.callbackUrl":       c.Auth.GitHub.CallbackURL,
+		"auth.github.authorizeUrl":      c.Auth.GitHub.AuthorizeURL,
+		"auth.github.tokenUrl":          c.Auth.GitHub.TokenURL,
+		"auth.github.apiBaseUrl":        c.Auth.GitHub.APIBaseURL,
+		"auth.portals.userUrl":          c.Auth.Portals.UserURL,
+		"auth.portals.adminUrl":         c.Auth.Portals.AdminURL,
+		"auth.cookies.userAccess":       c.Auth.Cookies.UserAccess,
+		"auth.cookies.userRefresh":      c.Auth.Cookies.UserRefresh,
+		"auth.cookies.userRefreshPath":  c.Auth.Cookies.UserRefreshPath,
+		"auth.cookies.adminAccess":      c.Auth.Cookies.AdminAccess,
+		"auth.cookies.adminRefresh":     c.Auth.Cookies.AdminRefresh,
+		"auth.cookies.adminRefreshPath": c.Auth.Cookies.AdminRefreshPath,
+		"auth.cookies.oauthState":       c.Auth.Cookies.OAuthState,
+		"auth.cookies.oauthStatePath":   c.Auth.Cookies.OAuthStatePath,
 	}
 	for key, val := range required {
 		switch {
@@ -168,6 +205,18 @@ func (c *Config) validate() error {
 	}
 	if c.Shared.Postgres.Port <= 0 || c.Shared.Redis.Port <= 0 {
 		errs = append(errs, errors.New("shared.postgres.port and shared.redis.port must be > 0"))
+	}
+	if c.Shared.JWT.AccessTTLSeconds < 60 || c.Shared.JWT.RefreshTTLSeconds <= c.Shared.JWT.AccessTTLSeconds {
+		errs = append(errs, errors.New("shared.jwt: accessTtlSeconds must be >= 60 and refreshTtlSeconds > accessTtlSeconds"))
+	}
+	if a := c.Auth.Admin; a.MaxFailedAttempts < 1 || a.LockoutMinutes < 1 || a.MinPasswordLength < 8 {
+		errs = append(errs, errors.New("auth.admin: maxFailedAttempts >= 1, lockoutMinutes >= 1, minPasswordLength >= 8 required"))
+	}
+	if !slices.Contains([]string{"lax", "strict", "none"}, c.Auth.Cookies.SameSite) {
+		errs = append(errs, errors.New(`auth.cookies.sameSite must be "lax", "strict" or "none"`))
+	}
+	if c.IsProduction() && !c.Auth.Cookies.Secure {
+		errs = append(errs, errors.New("auth.cookies.secure must be true in production"))
 	}
 	if c.IsProduction() {
 		for _, w := range c.Warnings() {

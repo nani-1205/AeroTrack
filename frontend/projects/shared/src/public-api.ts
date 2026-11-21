@@ -3,4 +3,5 @@
  */
 
 export * from './lib/api';
+export * from './lib/http/interceptors';
 export * from './lib/system-status/system-status';

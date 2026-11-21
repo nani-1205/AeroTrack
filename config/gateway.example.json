@@ -32,6 +32,8 @@
 
   "internalToken": "CHANGE_ME",
 
+  "csrf": { "header": "x-requested-with", "value": "aerotrack" },
+
   "rateLimit": { "max": 300, "windowSeconds": 60 },
 
   "websocket": {
@@ -41,8 +43,10 @@
   },
 
   "routes": [
-    { "prefix": "/api/auth",       "target": "http://localhost:7001", "access": "public" },
-    { "prefix": "/api/admin/auth", "target": "http://localhost:7001", "access": "public" },
+    { "prefix": "/api/auth",          "target": "http://localhost:7001", "access": "public" },
+    { "prefix": "/api/account",       "target": "http://localhost:7001", "access": "user" },
+    { "prefix": "/api/admin/auth",    "target": "http://localhost:7001", "access": "public" },
+    { "prefix": "/api/admin/account", "target": "http://localhost:7001", "access": "admin", "allowPendingPasswordChange": true },
     { "prefix": "/api/airlines",   "target": "http://localhost:7002", "access": "user" },
     { "prefix": "/api/flights",    "target": "http://localhost:7002", "access": "user" },
     { "prefix": "/api/admin",      "target": "http://localhost:7003", "access": "admin" }

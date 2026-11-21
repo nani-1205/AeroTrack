@@ -1,15 +1,18 @@
 <header class="topbar">
   <span class="brand">AeroTrack</span>
   <span class="tag">User Portal</span>
+  <span class="spacer"></span>
+  @if (auth.user(); as user) {
+    <span class="who">
+      @if (user.avatarUrl) {
+        <img class="avatar" [src]="user.avatarUrl" alt="" />
+      }
+      <span>{{ user.login }}</span>
+    </span>
+    <button type="button" class="btn btn-ghost" (click)="auth.signOut()">Sign out</button>
+  }
 </header>
 
 <main class="content">
-  <section class="intro">
-    <h1>Live flight tracking</h1>
-    <p>Sign in with GitHub, pick an airline, and follow up to 5 of its active flights live on the map.</p>
-  </section>
-
-  <lib-system-status />
-
   <router-outlet />
 </main>

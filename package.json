@@ -4,6 +4,7 @@
   "description": "AeroTrack — live aircraft & air-traffic tracking (microservices monorepo)",
   "scripts": {
     "setup": "node scripts/setup.mjs",
+    "config:migrate": "node scripts/migrate-local-config.mjs",
     "infra:up": "node scripts/sync-compose-env.mjs && docker compose up -d --wait",
     "infra:down": "docker compose down",
     "infra:logs": "docker compose logs -f",

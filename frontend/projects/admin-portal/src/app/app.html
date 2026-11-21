@@ -1,15 +1,13 @@
 <header class="topbar">
   <span class="brand">AeroTrack</span>
   <span class="tag">Admin Portal</span>
+  <span class="spacer"></span>
+  @if (auth.admin(); as admin) {
+    <span class="who">{{ admin.username }}</span>
+    <button type="button" class="btn btn-ghost" (click)="auth.signOut()">Sign out</button>
+  }
 </header>
 
 <main class="content">
-  <section class="intro">
-    <h1>Administration</h1>
-    <p>Signed-in users, usage analytics and system performance. Admins sign in with username &amp; password.</p>
-  </section>
-
-  <lib-system-status />
-
   <router-outlet />
 </main>

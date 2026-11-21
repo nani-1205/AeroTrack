@@ -33,6 +33,14 @@ npm --prefix frontend install
 
 `npm run setup` never overwrites existing files. It prints the bootstrap admin password once, and that password is also stored in `config/services.json` under `auth.admin`.
 
+After pulling a new phase, run `npm run config:migrate`. It adds any new config keys from the templates to your local `services.json` and `gateway.json` and leaves your existing values and secrets alone.
+
+**GitHub SSO:** create an OAuth App under GitHub → Settings → Developer settings → OAuth Apps.
+- Homepage URL: `http://localhost:4200`
+- Authorization callback URL: `http://localhost:8080/api/auth/github/callback`
+
+Put its client ID and secret in `config/services.json` → `auth.github`.
+
 ## Running (one terminal each)
 
 ```sh
@@ -79,16 +87,45 @@ All secrets and service-to-service call settings live in **two files**. Both are
 
 > The init script runs only on an **empty** volume. If you change DB passwords in `services.json` after the first run, either `ALTER ROLE` them yourself or, to discard all local data, run `docker compose down -v`.
 
+## Authentication
+
+| | User portal | Admin portal |
+|---|---|---|
+| Sign-in | GitHub OAuth (`GET /api/auth/github/login`) | Username and password (`POST /api/admin/auth/login`) |
+| Account store | `auth.users` (upserted from the GitHub profile) | `auth.admins` (argon2id hashes) |
+| Cookies (httpOnly) | `aerotrack_at` (access), `aerotrack_rt` (refresh, path `/api/auth`) | `aerotrack_admin_at`, `aerotrack_admin_rt` (path `/api/admin/auth`) |
+| JWT audience | `aerotrack-user` | `aerotrack-admin` |
+| Self-service | `GET /api/account/me` | `GET /api/admin/account/me`, `POST /api/admin/account/password` |
+
+- **Tokens:** access tokens are RS256 JWTs with a 15-minute lifetime. The gateway verifies them against `GET /.well-known/jwks.json` on the auth-service.
+- **Refresh tokens:** these are opaque random strings stored only as SHA-256 hashes in Redis. They **rotate** on every `POST …/refresh`, with a 30-second grace window so two tabs refreshing at once don't log each other out. Logout revokes the session.
+- **GitHub flow:** a single-use `state` is stored in Redis and also bound to the browser by a short-lived cookie, which protects against login CSRF. If the profile email is hidden, the primary verified email is used instead.
+- **Admin accounts:**
+  - The first admin is created from `auth.admin.bootstrap*`, and only when no admin exists. It must **change its password on first sign-in**; until then the gateway allows that token only on `/api/admin/account/*`.
+  - After `maxFailedAttempts` failures the account is locked for `lockoutMinutes`.
+  - Unknown usernames and wrong passwords return the same response and take the same time.
+  - Changing the password signs out all other sessions of that admin.
+- **Auditing and analytics:** every login attempt is written to `auth.login_events` and published to the Redis stream `events:auth`, which feeds analytics in Phase 4. Prometheus gets `auth_logins_total{kind,result}` and `auth_active_sessions{kind}`.
+
 ## Gateway security model
 
 - JWTs are verified against the auth-service JWKS (RS256). **User and admin tokens have different audiences**, so a user token can never open `/api/admin/*`.
-- Client-supplied `x-user-id`, `x-user-role` and `x-internal-token` headers are always stripped. The gateway sets them itself after verification, and services trust only requests that carry the internal token.
+- Client-supplied `x-user-id`, `x-user-role`, `x-session-id`, `x-forwarded-for` and `x-internal-token` headers are always stripped. The gateway sets them itself after verification, and services trust only requests that carry the internal token.
+- **CSRF:** every mutating `/api` request must send `X-Requested-With: aerotrack` (set in `csrf` in `gateway.json`). A custom header forces a CORS preflight, which only the portal origins pass. Cookies are also `SameSite=Lax`.
 - Rate limiting is shared through Redis, and requests still go through if Redis is briefly unavailable.
+
+## Tests
+
+```sh
+(cd services/auth-service && go test ./...)   # unit + integration (needs `npm run infra:up`; uses Redis DB 15, cleans up its rows)
+npm --prefix gateway test                     # access guard, audiences, CSRF, trusted headers
+npm --prefix frontend run test:all            # shared interceptors, both portals
+```
 
 ## Roadmap
 
 - [x] **Phase 0**: scaffold, config files, docker-compose, startup migrations, health checks and metrics everywhere
-- [ ] **Phase 1**: auth (GitHub SSO users, admin username/password with argon2id and lockout, JWT/JWKS, refresh sessions)
+- [x] **Phase 1**: auth (GitHub SSO users, admin username/password with argon2id and lockout, JWT/JWKS, refresh sessions)
 - [ ] **Phase 2**: tracking backend (airline seed data, OpenSky / adsb.lol / simulator providers, Redis live state, pub/sub)
 - [ ] **Phase 3**: user portal (airlines → active flights → live map, 1–5 flights of the same airline, WebSocket)
 - [ ] **Phase 4**: analytics service and admin dashboard (signed-in users, usage, system performance)

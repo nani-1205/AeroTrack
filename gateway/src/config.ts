@@ -16,6 +16,8 @@ const RouteSchema = z.object({
   prefix: z.string().regex(/^\/api\/[a-z0-9/-]+[a-z0-9]$/, 'must look like /api/<segment>[/<segment>]'),
   target: z.url(),
   access: z.enum(['public', 'user', 'admin']),
+  /** Admin tokens flagged "must change password" are accepted only on routes that set this. */
+  allowPendingPasswordChange: z.boolean().default(false),
 });
 
 export const GatewayConfigSchema = z
@@ -43,6 +45,9 @@ export const GatewayConfigSchema = z
       db: z.number().int().min(0),
     }),
     internalToken: secret,
+    /** Mutating /api requests must carry this header. Custom headers force a CORS preflight,
+     *  so other origins cannot forge cookie-authenticated POSTs. */
+    csrf: z.object({ header: z.string().min(1).toLowerCase(), value: z.string().min(1) }),
     rateLimit: z.object({ max: z.number().int().positive(), windowSeconds: z.number().int().positive() }),
     websocket: z.object({
       path: z.string().startsWith('/'),

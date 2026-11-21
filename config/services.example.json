@@ -38,13 +38,29 @@
       "clientId": "",
       "clientSecret": "",
       "callbackUrl": "http://localhost:8080/api/auth/github/callback",
-      "scopes": ["read:user", "user:email"]
+      "scopes": ["read:user", "user:email"],
+      "authorizeUrl": "https://github.com/login/oauth/authorize",
+      "tokenUrl": "https://github.com/login/oauth/access_token",
+      "apiBaseUrl": "https://api.github.com"
     },
     "admin": {
       "bootstrapUsername": "admin",
       "bootstrapPassword": "CHANGE_ME",
       "maxFailedAttempts": 5,
-      "lockoutMinutes": 15
+      "lockoutMinutes": 15,
+      "minPasswordLength": 12
+    },
+    "cookies": {
+      "secure": false,
+      "sameSite": "lax",
+      "userAccess": "aerotrack_at",
+      "userRefresh": "aerotrack_rt",
+      "userRefreshPath": "/api/auth",
+      "adminAccess": "aerotrack_admin_at",
+      "adminRefresh": "aerotrack_admin_rt",
+      "adminRefreshPath": "/api/admin/auth",
+      "oauthState": "aerotrack_oauth_state",
+      "oauthStatePath": "/api/auth/github"
     },
     "jwtPrivateKeyPath": "keys/jwt-private.pem",
     "jwtPublicKeyPath": "keys/jwt-public.pem",

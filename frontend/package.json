@@ -8,7 +8,7 @@
     "start:admin": "ng serve admin-portal",
     "build": "ng build",
     "build:all": "ng build user-portal && ng build admin-portal",
-    "test:all": "ng test user-portal --watch=false && ng test admin-portal --watch=false",
+    "test:all": "ng test shared --watch=false && ng test user-portal --watch=false && ng test admin-portal --watch=false",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },

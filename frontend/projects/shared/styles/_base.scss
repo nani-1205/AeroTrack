@@ -1,0 +1,105 @@
+// Base styles shared by both portals. Each app sets --brand / --brand-contrast / --tag-bg.
+:root {
+  --text: #1f2328;
+  --muted: #57606a;
+  --border: #d0d7de;
+  --surface: #ffffff;
+  --page: #f6f8fa;
+  --danger: #cf222e;
+  --danger-bg: #ffebe9;
+  --ok: #1a7f37;
+  --focus: #0969da;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--page);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--brand);
+  color: var(--brand-contrast);
+  .brand { font-weight: 700; font-size: 1.15rem; letter-spacing: 0.02em; }
+  .tag { font-size: 0.8rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--tag-bg); }
+  .spacer { flex: 1; }
+  .who { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+}
+
+.content { padding: 1.5rem; display: grid; gap: 1.5rem; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+
+.auth-card {
+  max-width: 24rem;
+  margin: 10vh auto 0;
+  h1 { font-size: 1.35rem; margin: 0 0 0.25rem; }
+  .lead { margin: 0 0 1.25rem; color: var(--muted); }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  &:disabled { opacity: 0.6; cursor: progress; }
+  &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+}
+.btn-primary { background: var(--brand); border-color: var(--brand); color: var(--brand-contrast); }
+.btn-block { width: 100%; }
+.btn-ghost { background: transparent; border-color: rgba(255, 255, 255, 0.45); color: inherit; padding: 0.3rem 0.75rem; }
+
+.alert {
+  padding: 0.65rem 0.85rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid rgba(207, 34, 46, 0.3);
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  label { font-weight: 600; font-size: 0.9rem; }
+  input {
+    font: inherit;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    &:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border-color: var(--focus); }
+    &[aria-invalid='true'] { border-color: var(--danger); }
+  }
+  .hint { color: var(--muted); font-size: 0.8rem; }
+  .error { color: var(--danger); font-size: 0.8rem; }
+}
+
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: rgba(255, 255, 255, 0.3); }
+
+.intro h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+.intro p { margin: 0; color: var(--muted); }
+
+.muted { color: var(--muted); }
