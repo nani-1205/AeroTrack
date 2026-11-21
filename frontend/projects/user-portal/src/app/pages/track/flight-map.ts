@@ -12,7 +12,10 @@ import {
   viewChild,
 } from '@angular/core';
 import type { GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl';
-import { FLIGHT_COLORS, MAP_LABEL_FONT, MAP_STYLE_URL } from '../../core/map-config';
+import { FLIGHT_COLORS, MAP_LABEL_FONT, MAP_STYLE_URL, MAP_WORKER_URL } from '../../core/map-config';
+
+/** Show a "basemap unavailable" notice only if the map has not loaded after this long. */
+const LOAD_TIMEOUT_MS = 15_000;
 import { planeIcon } from './plane-icon';
 
 export interface MapFlight {
@@ -38,7 +41,7 @@ export type MapTrails = Record<string, [number, number][]>;
     }
   `,
   styles: `
-    :host { position: relative; display: block; min-height: 20rem; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+    :host { position: relative; display: block; min-height: 20rem; overflow: hidden; background: #eef1f4; }
     .map { position: absolute; inset: 0; }
     .map-error { position: absolute; left: 1rem; right: 1rem; top: 1rem; margin: 0; }
   `,
@@ -52,6 +55,7 @@ export class FlightMap {
   private readonly container = viewChild.required<ElementRef<HTMLDivElement>>('container');
   private readonly styleUrl = inject(MAP_STYLE_URL);
   private readonly font = inject(MAP_LABEL_FONT);
+  private readonly workerUrl = inject(MAP_WORKER_URL);
   private readonly loaded = signal(false);
   protected readonly error = signal<string | null>(null);
   private map: MapLibreMap | null = null;
@@ -68,24 +72,47 @@ export class FlightMap {
     inject(DestroyRef).onDestroy(() => this.map?.remove());
   }
 
-  /** Centre the map on one flight. */
+  /** Room kept free for the floating flight panel on the right (desktop layout). */
+  private readonly padding = () =>
+    window.innerWidth > 900 ? { top: 90, bottom: 90, left: 90, right: 440 } : { top: 60, bottom: 60, left: 40, right: 40 };
+
+  /** Centre the map on one flight (shifted left so the panel does not cover it). */
   focus(lat: number, lon: number): void {
-    this.map?.easeTo({ center: [lon, lat], zoom: Math.max(this.map.getZoom(), 6), duration: 800 });
+    const offsetX = window.innerWidth > 900 ? -190 : 0;
+    this.map?.easeTo({ center: [lon, lat], zoom: Math.max(this.map.getZoom(), 6), offset: [offsetX, 0], duration: 800 });
+  }
+
+  /** Zoom to show every tracked flight. */
+  fitAll(animate = true): void {
+    const flights = this.flights();
+    if (!this.map || flights.length === 0) return;
+    const lons = flights.map((f) => f.lon);
+    const lats = flights.map((f) => f.lat);
+    this.map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], {
+      padding: this.padding(), maxZoom: 6.5, duration: animate ? 900 : 0,
+    });
   }
 
   private async init(): Promise<void> {
     try {
       const ml = await import('maplibre-gl'); // lazy: keeps MapLibre out of the initial bundle
-      const map = new ml.Map({ container: this.container().nativeElement, style: this.styleUrl, center: [10, 30], zoom: 2 });
-      this.map = map;
-      map.addControl(new ml.NavigationControl({ showCompass: true }), 'top-right');
-      map.addControl(new ml.ScaleControl({ unit: 'nautical' }), 'bottom-left');
-      map.on('error', (e) => {
-        if (!this.loaded()) this.error.set('The basemap could not be loaded. Live data is still shown in the panel.');
-        console.warn('map error', e.error?.message);
+      ml.setWorkerUrl(this.workerUrl);
+      const map = new ml.Map({
+        container: this.container().nativeElement, style: this.styleUrl, center: [10, 30], zoom: 2, attributionControl: false,
       });
+      this.map = map;
+      // Controls live on the left: the right side is covered by the floating flight panel.
+      map.addControl(new ml.NavigationControl({ showCompass: true }), 'top-left');
+      map.addControl(new ml.ScaleControl({ unit: 'nautical' }), 'bottom-left');
+      map.addControl(new ml.AttributionControl({ compact: true }), 'bottom-left');
+      // Individual tile/glyph errors are normal on flaky networks; only a map that never loads is an error.
+      map.on('error', (e) => console.warn('map error', e.error?.message));
+      const timeout = setTimeout(() => {
+        if (!this.loaded()) this.error.set('The basemap is taking too long to load. Live data is still shown in the panel.');
+      }, LOAD_TIMEOUT_MS);
+      map.once('load', () => clearTimeout(timeout));
       map.on('load', () => {
-        FLIGHT_COLORS.forEach((color, i) => map.addImage(`plane-${i}`, planeIcon(color), { pixelRatio: 2 }));
+        FLIGHT_COLORS.forEach((color, i) => map.addImage(`plane-${i}`, planeIcon(color, 80), { pixelRatio: 2 }));
         map.addSource('trails', { type: 'geojson', data: empty() });
         map.addSource('planes', { type: 'geojson', data: empty() });
         map.addLayer({
@@ -162,9 +189,7 @@ export class FlightMap {
 
     if (!this.fitted && flights.length > 0) {
       this.fitted = true;
-      const lons = flights.map((f) => f.lon);
-      const lats = flights.map((f) => f.lat);
-      map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: 80, maxZoom: 7, duration: 0 });
+      this.fitAll(false);
     }
   }
 }

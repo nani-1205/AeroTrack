@@ -31,3 +31,21 @@ export function predict(k: Kinematics, nowSeconds: number): { lat: number; lon: 
   if (!dt || k.headingDeg == null || !k.groundSpeedMs) return { lat: k.lat, lon: k.lon };
   return destination(k.lat, k.lon, k.headingDeg, k.groundSpeedMs * dt);
 }
+
+/** Shifts `lon` by ±360° so it is within 180° of `reference` (no jump across the antimeridian). */
+export function nearLon(lon: number, reference: number): number {
+  let l = lon;
+  while (l - reference > 180) l -= 360;
+  while (l - reference < -180) l += 360;
+  return l;
+}
+
+/**
+ * Makes a [lon, lat] path continuous across the antimeridian (e.g. 179.9 → 180.1 instead of
+ * 179.9 → -179.9), so MapLibre draws the short way instead of a line around the whole world.
+ */
+export function unwrapPath(points: [number, number][]): [number, number][] {
+  const out: [number, number][] = [];
+  for (const [lon, lat] of points) out.push([out.length ? nearLon(lon, out[out.length - 1]![0]) : lon, lat]);
+  return out;
+}

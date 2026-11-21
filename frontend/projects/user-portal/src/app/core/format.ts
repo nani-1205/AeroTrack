@@ -19,7 +19,7 @@ export function verticalRate(ms: number | null | undefined): string {
   if (ms == null) return DASH;
   const fpm = Math.round((ms * MS_TO_FPM) / 50) * 50;
   if (Math.abs(fpm) < 100) return 'level';
-  return `${fpm > 0 ? '▲ +' : '▼ −'}${nf.format(Math.abs(fpm))} ft/min`;
+  return `${fpm > 0 ? '+' : '−'}${nf.format(Math.abs(fpm))} ft/min`;
 }
 
 const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];

@@ -41,7 +41,8 @@ describe('FlightsPage', () => {
     const { el } = await render();
     expect(el.querySelector('h1')?.textContent).toContain('Air India Limited');
     expect(el.querySelectorAll('tbody tr').length).toBe(7);
-    expect(el.querySelector('tbody tr')?.textContent).toContain('DEL → BOM');
+    const route = [...el.querySelectorAll('tbody tr')[0]!.querySelectorAll('.route .ap')].map((n) => n.textContent);
+    expect(route).toEqual(['DEL', 'BOM']);
   });
 
   it('allows at most 5 selected flights and tracks them together', async () => {

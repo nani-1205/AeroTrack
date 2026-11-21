@@ -1,8 +1,8 @@
 @use '../../shared/styles/base';
 
-// Admin uses a dark header + red tag so it is never confused with the user portal.
+// The admin console uses a slightly deeper shell so it is never mistaken for the user portal.
 :root {
-  --brand: #24292f;
-  --brand-contrast: #ffffff;
-  --tag-bg: #cf222e;
+  --shell: #090e1a;
+  --shell-2: #0f1626;
+  --shell-3: #18223a;
 }

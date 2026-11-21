@@ -1,0 +1,72 @@
+// Shared full-screen layout for the admin sign-in and forced password-change pages.
+:host {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 32px 16px;
+  background:
+    radial-gradient(50% 45% at 50% 0%, rgba(37, 99, 235, 0.28), transparent 70%),
+    radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px) 0 0 / 24px 24px,
+    var(--shell);
+}
+
+.auth-card {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 18px;
+  padding: 32px;
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.auth-head {
+  display: grid;
+  gap: 6px;
+  ui-logo { margin-bottom: 14px; }
+  h1 { font-size: 1.45rem; font-weight: 700; letter-spacing: -0.03em; }
+  p { color: var(--text-2); }
+}
+
+form { display: grid; gap: 16px; }
+
+.pw { position: relative; }
+.pw .input { padding-right: 40px; }
+.pw .reveal {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  &:hover { color: var(--text); background: var(--gray-100); }
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--text-3);
+}
+
+.below { margin-top: 18px; text-align: center; font-size: 0.8rem; color: var(--shell-muted); }
+
+// Same card, shown inside the console shell (voluntary password change).
+:host(.embedded) {
+  place-items: start center;
+  min-height: auto;
+  padding: 48px 16px;
+  background: var(--bg);
+  .auth-card { box-shadow: var(--shadow-sm); border: 1px solid var(--border); }
+  .below { display: none; }
+}

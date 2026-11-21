@@ -5,7 +5,16 @@ import { InjectionToken } from '@angular/core';
  * Swap for any MapLibre-compatible style URL.
  */
 export const MAP_STYLE_URL = new InjectionToken<string>('MAP_STYLE_URL', {
-  factory: () => 'https://tiles.openfreemap.org/styles/liberty',
+  // "positron": a muted, low-contrast basemap so the coloured aircraft and trails stand out.
+  factory: () => 'https://tiles.openfreemap.org/styles/positron',
+});
+
+/**
+ * MapLibre's tile worker, copied to /maplibre/ by angular.json "assets". MapLibre would otherwise
+ * resolve it relative to its own bundle, which breaks once the bundler (dev cache or prod chunk) moves it.
+ */
+export const MAP_WORKER_URL = new InjectionToken<string>('MAP_WORKER_URL', {
+  factory: () => new URL('/maplibre/maplibre-gl-worker.mjs', document.baseURI).href,
 });
 
 /** A font served by the style's glyph endpoint (OpenFreeMap serves Noto Sans). */

@@ -2,47 +2,65 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { apiErrorOf } from '@aerotrack/shared';
+import { Icon, Logo, apiErrorOf } from '@aerotrack/shared';
+import { Eye, EyeOff, Lock, ShieldCheck, TriangleExclamationPoint, User } from 'lucide';
 import { AdminAuthService } from '../../core/admin-auth.service';
 
 @Component({
   selector: 'app-admin-login',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, Logo, Icon],
   template: `
-    <section class="card auth-card">
-      <h1>Admin sign-in</h1>
-      <p class="lead">Restricted to AeroTrack administrators.</p>
+    <div>
+      <section class="auth-card">
+        <header class="auth-head">
+          <ui-logo [markSize]="34" tag="Console" />
+          <h1>Sign in to the admin console</h1>
+          <p>Monitoring, users and system performance for AeroTrack.</p>
+        </header>
 
-      @if (error(); as message) {
-        <div class="alert" role="alert">{{ message }}</div>
-      } @else if (expired()) {
-        <div class="alert" role="alert">Your session expired. Please sign in again.</div>
-      }
+        @if (error(); as message) {
+          <div class="alert" role="alert"><ui-icon [icon]="icons.Alert" [size]="16" /><span>{{ message }}</span></div>
+        } @else if (expired()) {
+          <div class="alert warning" role="alert"><ui-icon [icon]="icons.Alert" [size]="16" /><span>Your session expired. Please sign in again.</span></div>
+        }
 
-      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-        <div class="field">
-          <label for="username">Username</label>
-          <input id="username" formControlName="username" autocomplete="username" autofocus
-                 [attr.aria-invalid]="invalid('username')" />
-          @if (invalid('username')) { <span class="error">Username is required.</span> }
-        </div>
-        <div class="field">
-          <label for="password">Password</label>
-          <input id="password" type="password" formControlName="password" autocomplete="current-password"
-                 [attr.aria-invalid]="invalid('password')" />
-          @if (invalid('password')) { <span class="error">Password is required.</span> }
-        </div>
-        <button type="submit" class="btn btn-primary btn-block" [disabled]="submitting()">
-          {{ submitting() ? 'Signing in…' : 'Sign in' }}
-        </button>
-      </form>
-    </section>
+        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <div class="field">
+            <label for="username">Username</label>
+            <span class="input-icon">
+              <ui-icon [icon]="icons.User" [size]="16" />
+              <input id="username" class="input" formControlName="username" autocomplete="username" autofocus [attr.aria-invalid]="invalid('username')" />
+            </span>
+            @if (invalid('username')) { <span class="error">Username is required.</span> }
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <span class="input-icon pw">
+              <ui-icon [icon]="icons.Lock" [size]="16" />
+              <input id="password" class="input" [type]="reveal() ? 'text' : 'password'" formControlName="password" autocomplete="current-password" [attr.aria-invalid]="invalid('password')" />
+              <button type="button" class="reveal" (click)="reveal.set(!reveal())" [attr.aria-label]="reveal() ? 'Hide password' : 'Show password'">
+                <ui-icon [icon]="reveal() ? icons.EyeOff : icons.Eye" [size]="16" />
+              </button>
+            </span>
+            @if (invalid('password')) { <span class="error">Password is required.</span> }
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg btn-block" [disabled]="submitting()">
+            {{ submitting() ? 'Signing in…' : 'Sign in' }}
+          </button>
+        </form>
+
+        <p class="foot"><ui-icon [icon]="icons.ShieldCheck" [size]="14" /> Restricted area · every sign-in attempt is logged</p>
+      </section>
+      <p class="below">AeroTrack administration</p>
+    </div>
   `,
+  styleUrl: '../auth-layout.scss',
 })
 export class AdminLoginPage {
   private readonly auth = inject(AdminAuthService);
   private readonly router = inject(Router);
+  protected readonly icons = { Eye, EyeOff, Lock, ShieldCheck, User, Alert: TriangleExclamationPoint };
 
   /** ?expired=1 after the session could not be refreshed. */
   readonly expired = input<string>();
@@ -52,6 +70,7 @@ export class AdminLoginPage {
     password: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
   protected readonly submitting = signal(false);
+  protected readonly reveal = signal(false);
   protected readonly error = signal<string | null>(null);
 
   protected invalid(name: 'username' | 'password'): boolean {

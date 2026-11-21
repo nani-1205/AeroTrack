@@ -13,8 +13,8 @@ describe('format', () => {
   });
 
   it('shows climb/descent in ft/min and "level" when flat', () => {
-    expect(verticalRate(5.08)).toBe('▲ +1,000 ft/min');
-    expect(verticalRate(-2.6)).toBe('▼ −500 ft/min');
+    expect(verticalRate(5.08)).toBe('+1,000 ft/min');
+    expect(verticalRate(-2.6)).toBe('−500 ft/min');
     expect(verticalRate(0.2)).toBe('level');
   });
 

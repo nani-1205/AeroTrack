@@ -24,8 +24,12 @@ describe('user-portal', () => {
     await fixture.whenStable();
 
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('.who')?.textContent).toContain('octocat');
-    expect(el.querySelector('button')?.textContent).toContain('Sign out');
+    expect(el.querySelector('.who')?.textContent).toContain('The Octocat');
+
+    el.querySelector<HTMLButtonElement>('.account-btn')!.click();
+    await fixture.whenStable();
+    expect(el.querySelector('.menu-head')?.textContent).toContain('@octocat');
+    expect(el.querySelector('.menu-item')?.textContent).toContain('Sign out');
   });
 
   it('hides account controls when nobody is signed in', async () => {

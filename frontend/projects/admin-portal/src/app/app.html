@@ -1,13 +1,34 @@
-<header class="topbar">
-  <span class="brand">AeroTrack</span>
-  <span class="tag">Admin Portal</span>
-  <span class="spacer"></span>
-  @if (auth.admin(); as admin) {
-    <span class="who">{{ admin.username }}</span>
-    <button type="button" class="btn btn-ghost" (click)="auth.signOut()">Sign out</button>
-  }
-</header>
+@if (shell()) {
+  <div class="console">
+    <aside class="sidebar" aria-label="Console navigation">
+      <a routerLink="/" class="brand"><ui-logo class="on-dark" [markSize]="30" tag="Console" /></a>
 
-<main class="content">
+      <nav>
+        <span class="section">Monitoring</span>
+        @for (item of navigation; track item.path) {
+          <a [routerLink]="item.path" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: item.exact }" ariaCurrentWhenActive="page">
+            <ui-icon [icon]="item.icon" [size]="17" /> {{ item.label }}
+          </a>
+        }
+        <span class="section">Account</span>
+        <a routerLink="/change-password" routerLinkActive="active" ariaCurrentWhenActive="page">
+          <ui-icon [icon]="icons.KeyRound" [size]="17" /> Change password
+        </a>
+      </nav>
+
+      <div class="me">
+        <span class="initial">{{ auth.admin()!.username.slice(0, 1).toUpperCase() }}</span>
+        <div class="id"><strong>{{ auth.admin()!.username }}</strong><span>Administrator</span></div>
+        <button type="button" class="signout" (click)="auth.signOut()" title="Sign out" aria-label="Sign out">
+          <ui-icon [icon]="icons.LogOut" [size]="16" />
+        </button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <router-outlet />
+    </main>
+  </div>
+} @else {
   <router-outlet />
-</main>
+}

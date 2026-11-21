@@ -1,4 +1,18 @@
-import { MAX_EXTRAPOLATION_S, destination, predict } from './geo';
+import { MAX_EXTRAPOLATION_S, destination, nearLon, predict, unwrapPath } from './geo';
+
+describe('antimeridian handling', () => {
+  it('keeps paths continuous across ±180°', () => {
+    expect(unwrapPath([[179, 40], [-179.5, 40.2], [-178, 40.5]])).toEqual([[179, 40], [180.5, 40.2], [182, 40.5]]);
+    expect(unwrapPath([[-179, 10], [179, 10]])).toEqual([[-179, 10], [-181, 10]]);
+    expect(unwrapPath([[10, 0], [20, 0]])).toEqual([[10, 0], [20, 0]]);
+  });
+
+  it('moves a longitude next to its reference', () => {
+    expect(nearLon(-179, 179)).toBe(181);
+    expect(nearLon(170, -170)).toBe(-190);
+    expect(nearLon(5, 0)).toBe(5);
+  });
+});
 
 describe('dead reckoning', () => {
   it('moves north along the meridian', () => {

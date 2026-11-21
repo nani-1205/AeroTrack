@@ -1,18 +1,43 @@
-<header class="topbar">
-  <span class="brand">AeroTrack</span>
-  <span class="tag">User Portal</span>
-  <span class="spacer"></span>
-  @if (auth.user(); as user) {
-    <span class="who">
-      @if (user.avatarUrl) {
-        <img class="avatar" [src]="user.avatarUrl" alt="" />
-      }
-      <span>{{ user.login }}</span>
-    </span>
-    <button type="button" class="btn btn-ghost" (click)="auth.signOut()">Sign out</button>
-  }
-</header>
+@if (auth.user(); as user) {
+  <header class="appbar">
+    <a routerLink="/" class="brand" aria-label="AeroTrack home"><ui-logo class="on-dark" [markSize]="30" /></a>
 
-<main class="content">
+    <nav class="nav" aria-label="Main">
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: false }" ariaCurrentWhenActive="page">
+        <ui-icon [icon]="icons.Building" [size]="16" /> Airlines
+      </a>
+    </nav>
+
+    <span class="spacer"></span>
+
+    <span class="live-pill" title="Positions stream live from the tracking service"><span class="dot live"></span> Live</span>
+
+    <div class="account">
+      <button type="button" class="account-btn" (click)="menuOpen.set(!menuOpen())" [attr.aria-expanded]="menuOpen()" aria-haspopup="menu">
+        @if (user.avatarUrl) {
+          <img class="avatar" [src]="user.avatarUrl" alt="" />
+        } @else {
+          <span class="avatar fallback">{{ user.login.slice(0, 1).toUpperCase() }}</span>
+        }
+        <span class="who">{{ auth.displayName() }}</span>
+        <ui-icon [icon]="icons.ChevronDown" [size]="14" />
+      </button>
+      @if (menuOpen()) {
+        <div class="menu" role="menu">
+          <div class="menu-head">
+            <strong>{{ user.name || user.login }}</strong>
+            <span class="subtle">&#64;{{ user.login }}</span>
+            @if (user.email) { <span class="subtle email"><ui-icon [icon]="icons.Mail" [size]="12" /> {{ user.email }}</span> }
+          </div>
+          <button type="button" role="menuitem" class="menu-item" (click)="signOut()">
+            <ui-icon [icon]="icons.LogOut" [size]="15" /> Sign out
+          </button>
+        </div>
+      }
+    </div>
+  </header>
+}
+
+<main [class.with-bar]="auth.user()">
   <router-outlet />
 </main>
