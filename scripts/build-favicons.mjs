@@ -3,6 +3,9 @@
 // apple-touch-icon.png (180 px) using a locally installed headless Chrome.
 //
 //   node scripts/build-favicons.mjs ["C:\\path\\to\\chrome.exe"]
+//
+// After changing an icon, bump the `?v=N` on the icon links in each portal's src/index.html —
+// browsers cache favicons per URL and otherwise keep showing the old one.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
