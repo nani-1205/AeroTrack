@@ -115,7 +115,7 @@ type SortKey = 'callsign' | 'altitude' | 'speed' | 'airborne';
                         {{ fmt.verticalRate(f.verticalRateMs) }}
                       </span>
                     </td>
-                    <td class="num">{{ fmt.duration(now() - f.firstSeen) }}</td>
+                    <td class="num" [title]="f.route?.departedAt ? 'Since take-off' : 'Since first seen by the tracking feed'">{{ fmt.duration(now() - airborneSince(f)) }}</td>
                     <td class="act" (click)="$event.stopPropagation()">
                       <button type="button" class="btn btn-sm" (click)="track([f.icao24])">Track <ui-icon [icon]="icons.ArrowRight" [size]="14" /></button>
                     </td>
@@ -193,6 +193,7 @@ export class FlightsPage {
   readonly icao = input.required<string>();
 
   protected readonly fmt = fmt;
+  protected readonly airborneSince = airborneSince;
   protected readonly icons = { ArrowDown, ArrowRight, ArrowUp, ChevronRight, Gauge, Hourglass, ListFilter, MoveRight, Navigation2, Plane, PlaneTakeoff, Radar, X };
   protected readonly colors = FLIGHT_COLORS;
   protected readonly max = MAX_TRACKED_FLIGHTS;
@@ -213,17 +214,17 @@ export class FlightsPage {
     const list = q ? this.flights().filter((f) => matches(f, q)) : [...this.flights()];
     const { key, dir } = this.sort();
     const val = (f: Flight): number | string =>
-      key === 'callsign' ? f.callsign : key === 'altitude' ? (f.altitudeM ?? -1) : key === 'speed' ? (f.groundSpeedMs ?? -1) : -f.firstSeen;
+      key === 'callsign' ? f.callsign : key === 'altitude' ? (f.altitudeM ?? -1) : key === 'speed' ? (f.groundSpeedMs ?? -1) : -airborneSince(f);
     return list.sort((a, b) => (val(a) < val(b) ? -dir : val(a) > val(b) ? dir : 0));
   });
   protected readonly kpis = computed(() => {
     const fl = this.flights();
     const avg = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
-    const longest = fl.reduce<Flight | null>((best, f) => (!best || f.firstSeen < best.firstSeen ? f : best), null);
+    const longest = fl.reduce<Flight | null>((best, f) => (!best || airborneSince(f) < airborneSince(best) ? f : best), null);
     return {
       altitude: fmt.altitude(avg(fl.flatMap((f) => (f.altitudeM == null ? [] : [f.altitudeM])))),
       speed: fmt.speed(avg(fl.flatMap((f) => (f.groundSpeedMs == null ? [] : [f.groundSpeedMs])))),
-      longest: longest ? fmt.duration(this.now() - longest.firstSeen) : '—',
+      longest: longest ? fmt.duration(this.now() - airborneSince(longest)) : '—',
       longestCallsign: longest?.callsign ?? null,
     };
   });
@@ -286,6 +287,11 @@ export class FlightsPage {
       this.error.set(status === 404 ? 'Unknown airline.' : 'Could not load flights. Retrying shortly…');
     }
   }
+}
+
+/** Take-off time when the feed knows it, otherwise when tracking first saw the aircraft. */
+export function airborneSince(f: Flight): number {
+  return f.route?.departedAt ?? f.firstSeen;
 }
 
 function matches(f: Flight, q: string): boolean {

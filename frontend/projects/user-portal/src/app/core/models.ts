@@ -29,7 +29,18 @@ export interface Flight {
   source: FlightSource;
   registration: string | null;
   aircraftType: string | null;
-  route: { origin: string; destination: string } | null;
+  route: Route | null;
+}
+
+export interface Route {
+  /** IATA codes */
+  origin: string;
+  destination: string;
+  /** [lat, lon] of the airports, when known */
+  originPos?: [number, number];
+  destinationPos?: [number, number];
+  /** Take-off time (unix s), when known. `Flight.firstSeen` is only when tracking first saw the aircraft. */
+  departedAt?: number;
 }
 
 /** [lat, lon, altitudeM, unixSeconds] */

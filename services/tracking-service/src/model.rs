@@ -16,8 +16,18 @@ pub enum Source {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Route {
+    /// IATA codes.
     pub origin: String,
     pub destination: String,
+    /// Airport coordinates, when the provider knows them (lets the UI draw the planned route).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_pos: Option<[f64; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination_pos: Option<[f64; 2]>,
+    /// Take-off time (unix seconds), when known. Not the same as `Flight::first_seen`, which is
+    /// when *we* first observed the aircraft (it may already have been mid-route).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub departed_at: Option<i64>,
 }
 
 /// One position report as delivered by a provider (before airline matching).

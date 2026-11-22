@@ -32,6 +32,36 @@ export function predict(k: Kinematics, nowSeconds: number): { lat: number; lon: 
   return destination(k.lat, k.lon, k.headingDeg, k.groundSpeedMs * dt);
 }
 
+const rad = (d: number) => (d * Math.PI) / 180;
+const deg = (r: number) => (r * 180) / Math.PI;
+
+/** Great-circle distance in kilometres. */
+export function distanceKm(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const h = Math.sin(rad(bLat - aLat) / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(rad(bLon - aLon) / 2) ** 2;
+  return (2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h))) / 1000;
+}
+
+/**
+ * Points along the shortest (great-circle) path between two airports, as a continuous
+ * [lon, lat] line. Long routes curve towards the poles: Kolkata → Atlanta flies over the Arctic.
+ */
+export function greatCircle(from: [number, number], to: [number, number], segments = 96): [number, number][] {
+  const [p1, l1, p2, l2] = [rad(from[0]), rad(from[1]), rad(to[0]), rad(to[1])];
+  const d = 2 * Math.asin(Math.sqrt(Math.sin((p2 - p1) / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin((l2 - l1) / 2) ** 2));
+  if (d < 1e-9) return [[from[1], from[0]]];
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= segments; i++) {
+    const f = i / segments;
+    const a = Math.sin((1 - f) * d) / Math.sin(d);
+    const b = Math.sin(f * d) / Math.sin(d);
+    const x = a * Math.cos(p1) * Math.cos(l1) + b * Math.cos(p2) * Math.cos(l2);
+    const y = a * Math.cos(p1) * Math.sin(l1) + b * Math.cos(p2) * Math.sin(l2);
+    const z = a * Math.sin(p1) + b * Math.sin(p2);
+    pts.push([deg(Math.atan2(y, x)), deg(Math.atan2(z, Math.sqrt(x * x + y * y)))]);
+  }
+  return unwrapPath(pts);
+}
+
 /** Shifts `lon` by ±360° so it is within 180° of `reference` (no jump across the antimeridian). */
 export function nearLon(lon: number, reference: number): number {
   let l = lon;

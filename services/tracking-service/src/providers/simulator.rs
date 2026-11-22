@@ -39,6 +39,10 @@ struct SimFlight {
     speed_ms: f64,
     cruise_m: f64,
     altitude_m: f64,
+    /// Seconds since take-off on the current leg (flights start mid-route, like a real feed).
+    elapsed_s: f64,
+    /// Take-off time, fixed on first report so it never jitters between snapshots.
+    departed_at: Option<i64>,
 }
 
 pub struct Simulator {
@@ -60,6 +64,7 @@ impl Simulator {
                 let (origin, destination, leg_m) = pick_route(&mut rng, None);
                 let cruise_m = rng.random_range(9_500.0..12_000.0);
                 let progress = rng.random_range(0.03..0.97);
+                let speed_ms = rng.random_range(220.0..255.0);
                 let mut f = SimFlight {
                     // Stable, unique per airline/index; lowercase hex like real ICAO 24-bit addresses.
                     icao24: format!("{:06x}", 0xA0_0000 + (a as u32) * 0x1000 + n),
@@ -69,9 +74,11 @@ impl Simulator {
                     destination,
                     leg_m,
                     progress,
-                    speed_ms: rng.random_range(220.0..255.0),
+                    speed_ms,
                     cruise_m,
                     altitude_m: 0.0,
+                    elapsed_s: progress * leg_m / speed_ms,
+                    departed_at: None,
                 };
                 f.altitude_m = target_altitude(&f);
                 flights.push(f);
@@ -84,9 +91,11 @@ impl Simulator {
     pub fn advance(&mut self, dt_s: f64) {
         for f in &mut self.flights {
             f.progress += f.speed_ms * dt_s / f.leg_m;
+            f.elapsed_s += dt_s;
             if f.progress >= 1.0 {
                 let (origin, destination, leg_m) = pick_route(&mut self.rng, Some(f.destination));
                 (f.origin, f.destination, f.leg_m, f.progress) = (origin, destination, leg_m, 0.0);
+                (f.elapsed_s, f.departed_at) = (0.0, None);
             }
         }
     }
@@ -109,6 +118,7 @@ impl Simulator {
                 let new_alt = target_altitude(f);
                 let vertical = (new_alt - f.altitude_m).clamp(-15.0, 15.0);
                 f.altitude_m = new_alt;
+                let departed_at = *f.departed_at.get_or_insert(now - f.elapsed_s.round() as i64);
                 Observation {
                     icao24: f.icao24.clone(),
                     callsign: Some(f.callsign.clone()),
@@ -127,6 +137,9 @@ impl Simulator {
                     route: Some(Route {
                         origin: AIRPORTS[f.origin].0.to_string(),
                         destination: AIRPORTS[f.destination].0.to_string(),
+                        origin_pos: Some([from.lat, from.lon]),
+                        destination_pos: Some([to.lat, to.lon]),
+                        departed_at: Some(departed_at),
                     }),
                 }
             })
@@ -196,6 +209,33 @@ mod tests {
             assert!(moved < 16_000.0, "moved {moved} m in 60 s");
             if b.route == a.route {
                 assert!(moved > 12_000.0, "moved only {moved} m in 60 s");
+            }
+        }
+    }
+
+    /// The reported position must lie on the stated route, and the take-off time must match
+    /// how far along that route the aircraft is (so "airborne" is honest).
+    #[test]
+    fn position_and_departure_are_consistent_with_the_route() {
+        let mut sim = Simulator::new(&cfg(5));
+        let now = 1_000_000;
+        let first = sim.observations(now);
+        sim.advance(30.0);
+        let later = sim.observations(now + 30);
+        for (o, o2) in first.iter().zip(&later) {
+            let r = o.route.as_ref().unwrap();
+            let (from, to) = (r.origin_pos.unwrap(), r.destination_pos.unwrap());
+            let (from, to, here) = (LatLon::new(from[0], from[1]), LatLon::new(to[0], to[1]), LatLon::new(o.lat, o.lon));
+            let detour = geo::distance_m(from, here) + geo::distance_m(here, to) - geo::distance_m(from, to);
+            assert!(detour < 1_000.0, "{} is {detour} m off its {}→{} great circle", o.icao24, r.origin, r.destination);
+
+            let flown = geo::distance_m(from, here);
+            let implied = flown / o.ground_speed_ms.unwrap();
+            let airborne = (now - r.departed_at.unwrap()) as f64;
+            assert!((airborne - implied).abs() < 2.0, "airborne {airborne}s but {implied}s of flying covered");
+
+            if o2.route.as_ref().unwrap().origin == r.origin {
+                assert_eq!(o2.route.as_ref().unwrap().departed_at, r.departed_at, "take-off time must not jitter");
             }
         }
     }

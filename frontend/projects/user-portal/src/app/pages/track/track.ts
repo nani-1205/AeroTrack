@@ -1,14 +1,23 @@
+import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { EmptyState, Icon, MAX_TRACKED_FLIGHTS, Monogram } from '@aerotrack/shared';
 import { ArrowLeft, Maximize, Navigation2, Plane, PlaneLanding, RadioTower } from 'lucide';
 import * as fmt from '../../core/format';
-import { nearLon, predict, unwrapPath } from '../../core/geo';
+import { distanceKm, greatCircle, nearLon, predict, unwrapPath } from '../../core/geo';
 import { LiveSocket } from '../../core/live-socket';
 import { FLIGHT_COLORS } from '../../core/map-config';
 import type { Airline, Flight } from '../../core/models';
 import { TrackingApi } from '../../core/tracking-api';
-import { FlightMap, type MapFlight, type MapTrails } from './flight-map';
+import { FlightMap, type MapFlight, type MapRoute, type MapTrails } from './flight-map';
+
+const km = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+
+interface RouteProgress {
+  /** 0–100 */
+  pct: number;
+  remainingKm: number;
+}
 
 const ICAO24 = /^[0-9a-f]{6}$/;
 /** Add a trail point at most this often (the server samples every 30 s; live frames are denser). */
@@ -29,7 +38,7 @@ export function parseIds(raw: string | undefined, max = MAX_TRACKED_FLIGHTS): st
 @Component({
   selector: 'app-track',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, FlightMap, Icon, Monogram, EmptyState],
+  imports: [RouterLink, FlightMap, Icon, Monogram, EmptyState, DecimalPipe],
   providers: [LiveSocket],
   template: `
     @if (!selection()) {
@@ -41,7 +50,7 @@ export function parseIds(raw: string | undefined, max = MAX_TRACKED_FLIGHTS): st
         </div>
       </div>
     } @else {
-      <app-flight-map class="map" [flights]="mapFlights()" [trails]="mapTrails()" [selected]="selectedId()" (select)="choose($event)" />
+      <app-flight-map class="map" [flights]="mapFlights()" [trails]="mapTrails()" [routes]="mapRoutes()" [selected]="selectedId()" (select)="choose($event)" />
 
       <aside class="panel glass" aria-label="Tracked flights">
         <header class="panel-head">
@@ -84,11 +93,18 @@ export function parseIds(raw: string | undefined, max = MAX_TRACKED_FLIGHTS): st
               </span>
 
               @if (f.route) {
+                @let p = progress()[f.icao24];
                 <span class="route">
                   <span class="code mono">{{ f.route.origin }}</span>
-                  <span class="line"><ui-icon [icon]="icons.Plane" [size]="13" /></span>
+                  <span class="line">
+                    @if (p) { <span class="flown" [style.width.%]="p.pct"></span> }
+                    <span class="plane" [style.left.%]="p ? p.pct : 50"><ui-icon [icon]="icons.Plane" [size]="13" /></span>
+                  </span>
                   <span class="code mono">{{ f.route.destination }}</span>
                 </span>
+                @if (p) {
+                  <span class="progress subtle">{{ p.pct | number: '1.0-0' }}% of the way · {{ kmText(p.remainingKm) }} km to go</span>
+                }
               } @else if (f.originCountry) {
                 <span class="subtle reg">Registered in {{ f.originCountry }}</span>
               }
@@ -98,7 +114,11 @@ export function parseIds(raw: string | undefined, max = MAX_TRACKED_FLIGHTS): st
                 <span><em>Speed</em><b>{{ fmt.speed(f.groundSpeedMs) }}</b></span>
                 <span><em>Heading</em><b class="hdg"><ui-icon [icon]="icons.Navigation2" [size]="11" [style.transform]="'rotate(' + (f.headingDeg ?? 0) + 'deg)'" />{{ fmt.heading(f.headingDeg) }}</b></span>
                 <span><em>Vertical</em><b>{{ fmt.verticalRate(f.verticalRateMs) }}</b></span>
-                <span><em>Airborne</em><b>{{ fmt.duration(now() - f.firstSeen) }}</b></span>
+                @if (f.route?.departedAt; as dep) {
+                  <span><em>Airborne</em><b>{{ fmt.duration(now() - dep) }}</b></span>
+                } @else {
+                  <span title="Time since this aircraft was first seen by the tracking feed"><em>Tracked for</em><b>{{ fmt.duration(now() - f.firstSeen) }}</b></span>
+                }
                 <span><em>Source</em><b>{{ sourceName(f.source) }}</b></span>
               </span>
               @if (f.registration) { <span class="subtle reg">Registration <span class="mono">{{ f.registration }}</span></span> }
@@ -138,9 +158,12 @@ export function parseIds(raw: string | undefined, max = MAX_TRACKED_FLIGHTS): st
     .age { font-size: .78rem; }
     .route { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
     .code { font-size: 1.25rem; font-weight: 700; letter-spacing: .02em; }
-    .line { position: relative; display: grid; place-items: center; height: 18px; color: var(--c); }
+    .line { position: relative; height: 18px; color: var(--c); }
     .line::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1.5px dashed var(--gray-300); }
-    .line ui-icon { position: relative; padding: 0 6px; background: var(--surface); transform: rotate(45deg); }
+    .flown { position: absolute; left: 0; top: calc(50% - 1px); height: 2px; border-radius: 2px; background: var(--c); }
+    .plane { position: absolute; top: 50%; transform: translate(-50%, -50%); display: grid; place-items: center; padding: 0 4px; background: var(--surface); }
+    .plane ui-icon { transform: rotate(45deg); }
+    .progress { font-size: .78rem; margin-top: -6px; }
     .telemetry { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; padding-top: 12px; border-top: 1px solid var(--border); }
     .telemetry span { display: grid; gap: 2px; min-width: 0; }
     .telemetry em { font-style: normal; font-size: .7rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--text-3); }
@@ -197,6 +220,44 @@ export class TrackPage {
       };
     });
   });
+
+  /** How far along its planned route each flight is (only when the airports are known). */
+  protected readonly progress = computed<Record<string, RouteProgress>>(() => {
+    const out: Record<string, RouteProgress> = {};
+    for (const f of this.mapFlights()) {
+      const r = this.flights()[f.id]?.route;
+      if (!r?.originPos || !r.destinationPos) continue;
+      const total = distanceKm(r.originPos[0], r.originPos[1], r.destinationPos[0], r.destinationPos[1]);
+      const flown = distanceKm(r.originPos[0], r.originPos[1], f.lat, f.lon);
+      const remaining = distanceKm(f.lat, f.lon, r.destinationPos[0], r.destinationPos[1]);
+      out[f.id] = { pct: total > 0 ? Math.min(100, Math.max(0, (flown / total) * 100)) : 0, remainingKm: remaining };
+    }
+    return out;
+  });
+
+  /** Planned great-circle routes, shifted by ±360° so each lines up with its aircraft. */
+  protected readonly mapRoutes = computed<MapRoute[]>(() => {
+    const progress = this.progress();
+    return this.mapFlights().flatMap((f) => {
+      const r = this.flights()[f.id]?.route;
+      if (!r?.originPos || !r.destinationPos) return [];
+      const path = greatCircle(r.originPos, r.destinationPos);
+      const anchor = path[Math.round(((progress[f.id]?.pct ?? 0) / 100) * (path.length - 1))]!;
+      const shift = nearLon(anchor[0], f.lon) - anchor[0];
+      const shifted = path.map(([lon, lat]) => [lon + shift, lat] as [number, number]);
+      return [{
+        id: f.id,
+        colorIndex: f.colorIndex,
+        path: shifted,
+        origin: { code: r.origin, lon: shifted[0]![0], lat: shifted[0]![1] },
+        destination: { code: r.destination, lon: shifted.at(-1)![0], lat: shifted.at(-1)![1] },
+      }];
+    });
+  });
+
+  protected kmText(v: number): string {
+    return km.format(v);
+  }
 
   /** Recorded trail + a final segment to the (predicted) current position. */
   protected readonly mapTrails = computed<MapTrails>(() => {

@@ -1,4 +1,28 @@
-import { MAX_EXTRAPOLATION_S, destination, nearLon, predict, unwrapPath } from './geo';
+import { MAX_EXTRAPOLATION_S, destination, distanceKm, greatCircle, nearLon, predict, unwrapPath } from './geo';
+
+describe('great-circle routes', () => {
+  const CCU: [number, number] = [22.6547, 88.4467];
+  const ATL: [number, number] = [33.6407, -84.4277];
+
+  it('measures distances', () => {
+    expect(distanceKm(28.5562, 77.1, 19.0896, 72.8656)).toBeGreaterThan(1130); // DEL–BOM
+    expect(distanceKm(28.5562, 77.1, 19.0896, 72.8656)).toBeLessThan(1160);
+  });
+
+  it('routes Kolkata → Atlanta over the Arctic, starting and ending at the airports', () => {
+    const path = greatCircle(CCU, ATL, 64);
+    expect(path[0]![0]).toBeCloseTo(88.4467, 3);
+    const [lastLon, lastLat] = path.at(-1)!;
+    expect(nearLon(lastLon, -84.4277)).toBeCloseTo(-84.4277, 3);
+    expect(lastLat).toBeCloseTo(33.6407, 3);
+    expect(Math.max(...path.map(([, lat]) => lat))).toBeGreaterThan(70); // well inside the Arctic
+  });
+
+  it('is continuous (no antimeridian jumps)', () => {
+    const path = greatCircle([35.77, 140.39], [47.45, -122.31]); // NRT → SEA
+    for (let i = 1; i < path.length; i++) expect(Math.abs(path[i]![0] - path[i - 1]![0])).toBeLessThan(10);
+  });
+});
 
 describe('antimeridian handling', () => {
   it('keeps paths continuous across ±180°', () => {

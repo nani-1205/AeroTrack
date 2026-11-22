@@ -31,6 +31,16 @@ export interface MapFlight {
 /** id → [lon, lat] points, oldest first. */
 export type MapTrails = Record<string, [number, number][]>;
 
+/** Planned great-circle route with its airports (only when the feed knows the route). */
+export interface MapRoute {
+  id: string;
+  colorIndex: number;
+  /** [lon, lat] points, origin → destination, continuous across the antimeridian. */
+  path: [number, number][];
+  origin: { code: string; lon: number; lat: number };
+  destination: { code: string; lon: number; lat: number };
+}
+
 @Component({
   selector: 'app-flight-map',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -49,6 +59,7 @@ export type MapTrails = Record<string, [number, number][]>;
 export class FlightMap {
   readonly flights = input.required<MapFlight[]>();
   readonly trails = input.required<MapTrails>();
+  readonly routes = input<MapRoute[]>([]);
   readonly selected = input<string | null>(null);
   readonly select = output<string>();
 
@@ -66,8 +77,9 @@ export class FlightMap {
     effect(() => {
       const flights = this.flights();
       const trails = this.trails();
+      const routes = this.routes();
       const selected = this.selected();
-      if (this.loaded()) this.render(flights, trails, selected);
+      if (this.loaded()) this.render(flights, trails, routes, selected);
     });
     inject(DestroyRef).onDestroy(() => this.map?.remove());
   }
@@ -82,12 +94,13 @@ export class FlightMap {
     this.map?.easeTo({ center: [lon, lat], zoom: Math.max(this.map.getZoom(), 6), offset: [offsetX, 0], duration: 800 });
   }
 
-  /** Zoom to show every tracked flight. */
+  /** Zoom to show every tracked flight together with its whole planned route. */
   fitAll(animate = true): void {
     const flights = this.flights();
     if (!this.map || flights.length === 0) return;
-    const lons = flights.map((f) => f.lon);
-    const lats = flights.map((f) => f.lat);
+    const points: [number, number][] = [...flights.map((f) => [f.lon, f.lat] as [number, number]), ...this.routes().flatMap((r) => r.path)];
+    const lons = points.map((p) => p[0]);
+    const lats = points.map((p) => p[1]);
     this.map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], {
       padding: this.padding(), maxZoom: 6.5, duration: animate ? 900 : 0,
     });
@@ -113,8 +126,38 @@ export class FlightMap {
       map.once('load', () => clearTimeout(timeout));
       map.on('load', () => {
         FLIGHT_COLORS.forEach((color, i) => map.addImage(`plane-${i}`, planeIcon(color, 80), { pixelRatio: 2 }));
+        map.addSource('routes', { type: 'geojson', data: empty() });
+        map.addSource('airports', { type: 'geojson', data: empty() });
         map.addSource('trails', { type: 'geojson', data: empty() });
         map.addSource('planes', { type: 'geojson', data: empty() });
+        // Planned route: dashed, faint — the flown trail (solid) is drawn on top of it.
+        map.addLayer({
+          id: 'routes',
+          type: 'line',
+          source: 'routes',
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': 0.55, 'line-dasharray': [2, 3] },
+        });
+        map.addLayer({
+          id: 'airports',
+          type: 'circle',
+          source: 'airports',
+          paint: { 'circle-radius': 5, 'circle-color': '#ffffff', 'circle-stroke-width': 2.5, 'circle-stroke-color': ['get', 'color'] },
+        });
+        map.addLayer({
+          id: 'airport-labels',
+          type: 'symbol',
+          source: 'airports',
+          layout: {
+            'text-field': ['get', 'code'],
+            'text-font': this.font,
+            'text-size': 12,
+            'text-offset': [0, 1.1],
+            'text-anchor': 'top',
+            'text-allow-overlap': true,
+          },
+          paint: { 'text-color': '#1f2937', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+        });
         map.addLayer({
           id: 'trails',
           type: 'line',
@@ -168,9 +211,27 @@ export class FlightMap {
     }
   }
 
-  private render(flights: MapFlight[], trails: MapTrails, selected: string | null): void {
+  private render(flights: MapFlight[], trails: MapTrails, routes: MapRoute[], selected: string | null): void {
     const map = this.map!;
     const color = (i: number) => FLIGHT_COLORS[i % FLIGHT_COLORS.length]!;
+    (map.getSource('routes') as GeoJSONSource).setData({
+      type: 'FeatureCollection',
+      features: routes.map((r) => ({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: r.path },
+        properties: { color: color(r.colorIndex) },
+      })),
+    });
+    (map.getSource('airports') as GeoJSONSource).setData({
+      type: 'FeatureCollection',
+      features: routes.flatMap((r) =>
+        [r.origin, r.destination].map((a) => ({
+          type: 'Feature' as const,
+          geometry: { type: 'Point' as const, coordinates: [a.lon, a.lat] },
+          properties: { code: a.code, color: color(r.colorIndex) },
+        })),
+      ),
+    });
     (map.getSource('planes') as GeoJSONSource).setData({
       type: 'FeatureCollection',
       features: flights.map((f) => ({
