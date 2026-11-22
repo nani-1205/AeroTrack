@@ -42,6 +42,8 @@ npm --prefix frontend run build:all            # → frontend/dist/admin-portal/
 cd frontend && npx ng test admin-portal --watch=false     # 12 tests: sign-in, password change, strength meter, chart scales/line/bars
 ```
 
+**Linux release build:** `./scripts/build-linux.sh frontend` builds both portals, and the console lands in `release/admin-portal/`.
+
 **Deploying:** the same as the user portal (static files, `/api` and `/health` to the gateway, SPA fallback). Keep the console on a **separate origin**, ideally restricted to your network or VPN, and add that origin to `cors.origins`.
 
 ## Smoke check

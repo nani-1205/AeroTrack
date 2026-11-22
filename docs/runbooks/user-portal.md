@@ -41,6 +41,8 @@ cd frontend && npx ng test user-portal --watch=false     # 26 tests
 npm run icons                                # regenerate favicon.ico / apple-touch-icon from public/favicon.svg
 ```
 
+**Linux release build:** `./scripts/build-linux.sh frontend` builds both portals and copies them to `release/user-portal/` and `release/admin-portal/`.
+
 The initial bundle is about 365 kB (about 88 kB over the wire). MapLibre (about 1 MB) is a lazy chunk that only the map page loads.
 
 ## Deploying the build

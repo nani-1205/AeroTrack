@@ -4,6 +4,9 @@ config/gateway.json
 config/keys/
 .env
 
+# --- Linux release build output (scripts/build-linux.sh) ---
+release/
+
 # --- Node / Angular ---
 node_modules/
 dist/

@@ -49,6 +49,17 @@ cd services/tracking-service && cargo build --release
 ./target/release/tracking-service                       # AEROTRACK_CONFIG=… to point at another file
 ```
 
+**Linux release build** (toolchain setup: [Building and running on Linux](README.md#building-and-running-on-linux)):
+
+```sh
+./scripts/build-linux.sh tracking        # = cargo build --release --locked (about 2 min from clean)
+AEROTRACK_CONFIG=/etc/aerotrack/services.json ./release/tracking-service/tracking-service
+```
+
+- The binary (about 13 MB) embeds the migrations **and** the airline seed, so no other files are needed.
+- It links dynamically against glibc, so build it on the same distro release as the server, or an older one.
+- TLS for OpenSky and adsb.lol uses rustls, so OpenSSL is not required.
+
 On startup the service:
 1. checks its config and logs any quota warnings;
 2. waits for Postgres and applies pending sqlx migrations;

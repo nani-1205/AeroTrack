@@ -82,6 +82,28 @@ npm run dev:admin-portal   # http://localhost:4201
 
 To check everything is up, open http://localhost:8080/health/services. It returns the readiness of every backend service.
 
+## Building for Linux (production)
+
+One script builds every component into a self-contained `release/` folder:
+
+```sh
+./scripts/build-linux.sh                    # everything (or: npm run build:linux)
+./scripts/build-linux.sh auth tracking      # only some: frontend gateway auth tracking analytics
+RELEASE_DIR=/opt/aerotrack ./scripts/build-linux.sh
+```
+
+| Output | Run it with |
+|---|---|
+| `release/auth-service/auth` (static binary) | `AEROTRACK_CONFIG=/etc/aerotrack/services.json ./auth` |
+| `release/tracking-service/tracking-service` | `AEROTRACK_CONFIG=/etc/aerotrack/services.json ./tracking-service` |
+| `release/analytics-service/` (app + vendored gems) | `cd analytics-service && AEROTRACK_CONFIG=… RAILS_ENV=production ruby bin/start` |
+| `release/gateway/` (`dist/` + production `node_modules`) | `cd gateway && GATEWAY_CONFIG=/etc/aerotrack/gateway.json node dist/main.js` |
+| `release/user-portal/`, `release/admin-portal/` | Static files, served by nginx/Caddy (see the [user portal runbook](docs/runbooks/user-portal.md#deploying-the-build)) |
+
+- **Toolchains** (Ubuntu/Debian install commands are in [docs/runbooks/README.md](docs/runbooks/README.md#building-and-running-on-linux)): Node.js 22+, Go 1.25+, Rust 1.85+, Ruby 3.3+ with Bundler, and `build-essential`.
+- **Tested on x86_64** (Debian 13) with Go 1.27.4, current stable Rust, Node 24.22 and Ruby 4.0.10. Each artifact was started against PostgreSQL 18 and Redis 8 and passed its readiness check.
+- **Config paths:** release builds have no repo around them, so **always set `AEROTRACK_CONFIG` / `GATEWAY_CONFIG`**. JWT key paths inside `services.json` resolve relative to that file, e.g. `/etc/aerotrack/keys/`.
+
 ## Configuration in brief
 
 All configuration lives in **two JSON files**. Both are git-ignored, and their `*.example.json` templates are committed:
@@ -105,6 +127,7 @@ All configuration lives in **two JSON files**. Both are git-ignored, and their `
 | `npm run infra:up` / `infra:down` / `infra:logs` | Manage the Docker infrastructure |
 | `npm run dev:<service>` | Run one component in development mode |
 | `npm run icons` | Regenerate favicons from `public/favicon.svg` |
+| `npm run build:linux` | Production build of everything into `release/` (Linux; see above) |
 | `node scripts/build-airline-seed.mjs` | Rebuild the airline catalogue from OpenFlights |
 
 ## Tests

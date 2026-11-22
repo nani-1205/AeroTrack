@@ -32,6 +32,8 @@ npm run infra:down   # stop (data volumes are kept)
 docker compose ps    # status and health
 ```
 
+**On Linux** the same commands work with Docker Engine and the Compose plugin. Prometheus reaches services running on the host through `host.docker.internal`, which the compose file maps to the host gateway. If a firewall (e.g. `ufw`) is active, allow the Docker bridge to reach ports 7001–7003 and 8080, or the Prometheus targets show DOWN.
+
 ## Everyday commands
 
 ```sh

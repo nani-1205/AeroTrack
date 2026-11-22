@@ -2,3 +2,8 @@
 # Shell scripts run inside Linux containers — must keep LF endings on Windows checkouts.
 *.sh text eol=lf
 *.sql text eol=lf
+# Bundler compares the lockfile byte-for-byte in frozen/deployment mode (Linux builds);
+# a CRLF copy from a Windows checkout fails with "Your lockfile needs to be updated".
+Gemfile.lock text eol=lf
+# Executable scripts with a shebang must stay LF even in Windows checkouts.
+services/analytics-service/bin/* text eol=lf

@@ -38,6 +38,20 @@ cd ../.. && npm run dev:analytics                                  # = ruby bin/
 4. starts the **event consumer** thread;
 5. runs Puma (single process).
 
+**Linux release build** (toolchain setup: [Building and running on Linux](README.md#building-and-running-on-linux)):
+
+```sh
+./scripts/build-linux.sh analytics
+#  copies the app to release/analytics-service/, then:
+#  bundle config set --local deployment true && bundle config set --local path vendor/bundle
+#  bundle config set --local without 'development test' && bundle install
+cd release/analytics-service && AEROTRACK_CONFIG=/etc/aerotrack/services.json RAILS_ENV=production ruby bin/start
+```
+
+- **Self-contained:** the folder holds the app, its gems in `vendor/bundle` (about 90 MB), and its own `.bundle/config`. `config/boot.rb` uses that config even when the environment sets `BUNDLE_APP_CONFIG`, as the official Ruby Docker image does.
+- **Same Ruby version:** gems with native extensions (puma, rbs) are compiled for the build machine's Ruby, so run the release with the same Ruby version.
+- **Strict lockfile:** deployment mode uses `Gemfile.lock` exactly as committed. If Bundler says "Your lockfile needs to be updated", the lockfile probably has Windows line endings. Build from a fresh Linux `git clone`; `.gitattributes` keeps `Gemfile.lock` LF.
+
 > **Windows:** start it with `ruby bin/start`, not `bundle exec ruby bin/start`. On Windows, stopping the `bundle exec` wrapper leaves Puma running and holding the port. `config/boot.rb` already loads Bundler.
 
 ## Test

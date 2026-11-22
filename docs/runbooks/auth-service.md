@@ -43,6 +43,16 @@ cd services/auth-service && go build -o bin/auth ./cmd/auth && ./bin/auth
 AEROTRACK_CONFIG=/etc/aerotrack/services.json ./bin/auth
 ```
 
+**Linux release build** (toolchain setup: [Building and running on Linux](README.md#building-and-running-on-linux)):
+
+```sh
+./scripts/build-linux.sh auth
+# = cd services/auth-service && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o <release>/auth-service/auth ./cmd/auth
+AEROTRACK_CONFIG=/etc/aerotrack/services.json ./release/auth-service/auth
+```
+
+The result is a single **static** binary (about 16 MB) with the migrations embedded, so it runs on any x86_64 Linux. The JWT keys are read from `keys/` next to the config file, e.g. `/etc/aerotrack/keys/`.
+
 On startup the service:
 1. checks its config;
 2. loads the JWT key pair;

@@ -58,6 +58,13 @@ GATEWAY_CONFIG=/etc/aerotrack/gateway.json npm --prefix gateway start
 
 The gateway needs Redis at startup. auth-service only needs to be up when the first protected request arrives (for the JWKS).
 
+**Linux release build** (toolchain setup: [Building and running on Linux](README.md#building-and-running-on-linux)):
+
+```sh
+./scripts/build-linux.sh gateway        # npm ci && npm run build, then production-only node_modules → release/gateway/
+cd release/gateway && GATEWAY_CONFIG=/etc/aerotrack/gateway.json node dist/main.js
+```
+
 ## Test
 
 ```sh
