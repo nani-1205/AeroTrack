@@ -1,64 +1,17 @@
-# Shared
+# @aerotrack/shared
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.3.0.
+Code and styles shared by the user portal and the admin console. Apps import it as `@aerotrack/shared`; it maps to `src/public-api.ts` through `tsconfig.json`, so no build step is needed.
 
-## Code scaffolding
+| Export | Purpose |
+|---|---|
+| `styles/_base.scss` | Design tokens (colour, type, radius, elevation, motion) and component classes: `.btn`, `.input`, `.card`, `.badge`, `.table`, `.alert`, `.skeleton`, `.checkbox`, layout helpers. Each app `@use`s it in `src/styles.scss`. |
+| `Icon` (`<ui-icon [icon]="Plane" [size]="16" />`) | Renders a Lucide icon node (tree-shakeable) |
+| `Logo` (`<ui-logo tag="Console" />`) | Brand mark and wordmark; add the class `on-dark` on dark backgrounds |
+| `Monogram` (`<ui-monogram code="AIC" label="AI" />`) | Coloured initials tile; the colour is derived from the code |
+| `Stat` (`<ui-stat label value hint [icon] [loading] />`) | KPI tile |
+| `EmptyState` | Icon, heading and description for empty lists |
+| `SystemStatus` (`<lib-system-status />`) | Service health from the gateway's `/health/services` |
+| `csrfInterceptor`, `createAuthRefreshInterceptor({...})` | Adds `X-Requested-With: aerotrack` to `/api` calls; on a 401, runs one shared refresh and retries |
+| `API_BASE_URL`, `MAX_TRACKED_FLIGHTS`, `apiErrorOf()` | API base (`/api`), the 1–5 flight limit, typed error bodies |
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the library, run:
-
-```bash
-ng build shared
-```
-
-This command will compile your project, and the build artifacts will be placed in the `dist/` directory.
-
-### Publishing the Library
-
-Once the project is built, you can publish your library by following these steps:
-
-1. Navigate to the `dist` directory:
-
-   ```bash
-   cd dist/shared
-   ```
-
-2. Run the `npm publish` command to publish your library to the npm registry:
-   ```bash
-   npm publish
-   ```
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Tests: `npx ng test shared --watch=false`.

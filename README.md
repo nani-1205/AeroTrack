@@ -2,226 +2,153 @@
 
 Live aircraft and air-traffic tracking, built as microservices.
 
-| Part | Stack | Port | Path |
+- **Users** sign in with GitHub, pick an airline, select 1–5 of its flights in the air, and follow them live on a map, with routes, trails and telemetry.
+- **Admins** use a separate console, with username and password sign-in, to see who is signed in, how the product is used, and how every service is performing.
+
+Flight data comes only from **free, open sources**:
+- **OpenSky Network:** worldwide positions;
+- **adsb.lol:** fast refresh of the flights users are watching;
+- a built-in **simulator**, used by default for offline development.
+
+## Architecture
+
+```
+            ┌──────────────────────┐        ┌──────────────────────┐
+            │  User portal  :4200  │        │  Admin console :4201 │   Angular 22
+            └──────────┬───────────┘        └──────────┬───────────┘
+                       │   /api · /ws (live positions) · /health
+                       ▼                               ▼
+            ┌─────────────────────────────────────────────────────┐
+            │  API gateway :8080   Node.js · Fastify · TypeScript │  JWT (RS256/JWKS), CSRF,
+            └──────┬──────────────────┬──────────────────┬────────┘  rate limits, WebSocket
+                   ▼                  ▼                  ▼
+            auth-service :7001  tracking-service :7002  analytics-service :7003
+            Go                  Rust                    Ruby on Rails
+            GitHub SSO, admins, OpenSky / adsb.lol /    usage events, user stats,
+            JWT, sessions       simulator, live state   Prometheus metrics
+                   └──────────────────┼──────────────────┘
+                PostgreSQL 18 (one schema per service) · Redis 8 · Prometheus
+```
+
+| Component | Stack | Port | Runbook |
 |---|---|---|---|
-| User portal (GitHub SSO) | Angular 22 | 4200 | [frontend/projects/user-portal](frontend/projects/user-portal) |
-| Admin portal (username + password) | Angular 22 | 4201 | [frontend/projects/admin-portal](frontend/projects/admin-portal) |
-| Shared UI/core library | Angular | — | [frontend/projects/shared](frontend/projects/shared) |
-| API gateway | Node.js, Fastify, TypeScript | 8080 | [gateway](gateway) |
-| auth-service | Go | 7001 | [services/auth-service](services/auth-service) |
-| tracking-service | Rust (axum, sqlx) | 7002 | [services/tracking-service](services/tracking-service) |
-| analytics-service | Ruby (Rails 8.1 API) | 7003 | [services/analytics-service](services/analytics-service) |
-| PostgreSQL 18, Redis 8, Prometheus | docker-compose | 5432 / 6379 / 9090 | [docker-compose.yml](docker-compose.yml) |
+| User portal | Angular 22, MapLibre GL | 4200 | [docs/runbooks/user-portal.md](docs/runbooks/user-portal.md) |
+| Admin console | Angular 22, SVG charts | 4201 | [docs/runbooks/admin-portal.md](docs/runbooks/admin-portal.md) |
+| API gateway | Node.js 22+, Fastify 5, TypeScript | 8080 | [docs/runbooks/gateway.md](docs/runbooks/gateway.md) |
+| auth-service | Go 1.25+ | 7001 | [docs/runbooks/auth-service.md](docs/runbooks/auth-service.md) |
+| tracking-service | Rust (axum, sqlx) | 7002 | [docs/runbooks/tracking-service.md](docs/runbooks/tracking-service.md) |
+| analytics-service | Ruby on Rails 8.1 (API) | 7003 | [docs/runbooks/analytics-service.md](docs/runbooks/analytics-service.md) |
+| PostgreSQL 18 · Redis 8 · Prometheus | Docker Compose | 5432 · 6379 · 9090 | [docs/runbooks/infrastructure.md](docs/runbooks/infrastructure.md) |
 
-Flight data comes only from free, open sources: **OpenSky Network** (primary), **adsb.lol** (fallback), and a built-in **simulator** for offline development.
+The [runbooks index](docs/runbooks/README.md) lists the conventions every service shares: config, health, metrics, migrations, logs.
 
-## Prerequisites
+## Quick start
 
-Docker (with Compose), Node 22+, Go 1.25+, Rust 1.85+, and Ruby 3.3+ with Bundler.
-
-## First-time setup
+**Prerequisites:** Docker with Compose, Node.js 22+, Go 1.25+, Rust 1.85+, Ruby 3.3+ with Bundler.
 
 ```sh
-npm run setup        # creates config/services.json + config/gateway.json with random secrets,
-                     # JWT keys in config/keys/, and the docker-compose .env
-npm run infra:up     # Postgres 18 + Redis 8 + Prometheus (waits until healthy)
+# 1. Configuration, secrets, JWT keys (never overwrites existing files)
+npm run setup
 
+# 2. Infrastructure: PostgreSQL, Redis, Prometheus
+npm run infra:up
+
+# 3. Dependencies
 npm --prefix gateway install
 npm --prefix frontend install
 (cd services/analytics-service && bundle config set --local path vendor/bundle && bundle install)
 ```
 
-`npm run setup` never overwrites existing files. It prints the bootstrap admin password once, and that password is also stored in `config/services.json` under `auth.admin`.
-
-After pulling a new phase, run `npm run config:migrate`. It adds any new config keys from the templates to your local `services.json` and `gateway.json` and leaves your existing values and secrets alone.
-
-**GitHub SSO:** create an OAuth App under GitHub → Settings → Developer settings → OAuth Apps.
+**4. GitHub sign-in.** Create an OAuth App under GitHub → Settings → Developer settings → OAuth Apps:
 - Homepage URL: `http://localhost:4200`
-- Authorization callback URL: `http://localhost:8080/api/auth/github/callback`
+- Callback URL: `http://localhost:8080/api/auth/github/callback`
 
-Put its client ID and secret in `config/services.json` → `auth.github`.
+Copy its client ID and secret into `config/services.json` → `auth.github`.
 
-## Running (one terminal each)
+**5. Run each service in its own terminal:**
 
 ```sh
-npm run dev:auth          # Go
-npm run dev:tracking      # Rust
-npm run dev:analytics     # Ruby
-npm run dev:gateway       # Node
-npm run dev:user-portal   # http://localhost:4200
-npm run dev:admin-portal  # http://localhost:4201
+npm run dev:auth           # Go        :7001
+npm run dev:tracking       # Rust      :7002
+npm run dev:analytics      # Ruby      :7003
+npm run dev:gateway        # Node      :8080
+npm run dev:user-portal    # http://localhost:4200
+npm run dev:admin-portal   # http://localhost:4201
 ```
 
-Every service exposes `GET /health/live`, `GET /health/ready` (checks Postgres and Redis) and `GET /metrics`. While not in production, the gateway also serves `GET /health/services`, which aggregates all upstream services. Both portals show it on their home page.
+**6. Open the portals.**
+- **User portal**, http://localhost:4200: sign in with GitHub.
+- **Admin console**, http://localhost:4201: sign in as `admin` with `auth.admin.bootstrapPassword` from `config/services.json`. You'll be asked to choose a new password.
 
-## Configuration: two JSON files
+To check everything is up, open http://localhost:8080/health/services. It returns the readiness of every backend service.
 
-All secrets and service-to-service call settings live in **two files**. Both are git-ignored, and their `*.example.json` templates are committed:
+## Configuration in brief
+
+All configuration lives in **two JSON files**. Both are git-ignored, and their `*.example.json` templates are committed:
 
 | File | Read by | Contains |
 |---|---|---|
-| [config/services.json](config/services.example.json) | auth, tracking, analytics (each reads `shared` plus its own section) and docker-compose (through the generated `.env`) | DB and Redis credentials, JWT settings, the internal token, GitHub OAuth app, admin bootstrap account, OpenSky / adsb.lol / Prometheus URLs |
-| [config/gateway.json](config/gateway.example.json) | gateway only | the routing table (`prefix` → `target` + `access`), CORS, cookies, JWKS URL, rate limits, WebSocket limits |
+| `config/services.json` | auth, tracking, analytics (each reads `shared` plus its own section), and Docker Compose through a generated `.env` | DB and Redis credentials, JWT settings, the internal service token, the GitHub OAuth app, the bootstrap admin, data providers, service URLs |
+| `config/gateway.json` | gateway | Routing table, CORS, cookies, JWKS URL, CSRF, rate limits, WebSocket limits |
 
-- Override the file location with `AEROTRACK_CONFIG` (services) or `GATEWAY_CONFIG` (gateway), for example to use a Docker secret mount.
-- Every service validates its config at startup. A missing value or a leftover `CHANGE_ME` stops it.
-- Relative paths inside `services.json`, such as JWT key paths, resolve against the `config/` directory.
-- `.env` is **generated** by `scripts/sync-compose-env.mjs`, and `npm run infra:up` re-syncs it. Never edit it by hand.
-- The Angular apps contain no secrets. In development, `/api`, `/health` and `/ws` are proxied to the gateway through [frontend/proxy.conf.json](frontend/proxy.conf.json).
+- **New keys after pulling:** run `npm run config:migrate`. It adds keys from the templates and never changes your values.
+- **Other file locations:** set `AEROTRACK_CONFIG` or `GATEWAY_CONFIG`.
+- **Validation:** services refuse to start on a missing value or a leftover `CHANGE_ME`.
+- **Switch to real flight data:** set `tracking.provider` to `"opensky"`. Read the quota notes in the [tracking runbook](docs/runbooks/tracking-service.md#configuration-servicesjson--shared--tracking) first.
 
-## Database and migration policy
+## Useful scripts
 
-- There is one Postgres database, with **one schema and one login role per service** (`auth`, `tracking`, `analytics`). These are created by [infra/postgres/init](infra/postgres/init) the first time the volume is initialised.
-- **Every service migrates its own schema at startup**:
-  1. it waits for Postgres, retrying with backoff (`shared.postgres.startupRetries`);
-  2. it takes a Postgres **advisory lock**, so replicas never migrate concurrently;
-  3. it applies **only pending** migrations, forward-only.
-- **Nothing is ever forced.** There is no reset, no drop and no "force version". If an applied migration was edited (checksum mismatch), is missing, or was only partly applied, the service **refuses to start** with a clear error.
-- To change a schema, **add a new migration file**. Never edit an applied one.
-
-| Service | Tool | Migrations |
-|---|---|---|
-| auth | goose (embedded SQL) | [services/auth-service/internal/database/migrations](services/auth-service/internal/database/migrations) |
-| tracking | sqlx `migrate!` (embedded) | [services/tracking-service/migrations](services/tracking-service/migrations) |
-| analytics | ActiveRecord | [services/analytics-service/db/migrate](services/analytics-service/db/migrate) |
-
-> The init script runs only on an **empty** volume. If you change DB passwords in `services.json` after the first run, either `ALTER ROLE` them yourself or, to discard all local data, run `docker compose down -v`.
-
-## Authentication
-
-| | User portal | Admin portal |
-|---|---|---|
-| Sign-in | GitHub OAuth (`GET /api/auth/github/login`) | Username and password (`POST /api/admin/auth/login`) |
-| Account store | `auth.users` (upserted from the GitHub profile) | `auth.admins` (argon2id hashes) |
-| Cookies (httpOnly) | `aerotrack_at` (access), `aerotrack_rt` (refresh, path `/api/auth`) | `aerotrack_admin_at`, `aerotrack_admin_rt` (path `/api/admin/auth`) |
-| JWT audience | `aerotrack-user` | `aerotrack-admin` |
-| Self-service | `GET /api/account/me` | `GET /api/admin/account/me`, `POST /api/admin/account/password` |
-
-- **Tokens:** access tokens are RS256 JWTs with a 15-minute lifetime. The gateway verifies them against `GET /.well-known/jwks.json` on the auth-service.
-- **Refresh tokens:** these are opaque random strings stored only as SHA-256 hashes in Redis. They **rotate** on every `POST …/refresh`, with a 30-second grace window so two tabs refreshing at once don't log each other out. Logout revokes the session.
-- **GitHub flow:** a single-use `state` is stored in Redis and also bound to the browser by a short-lived cookie, which protects against login CSRF. If the profile email is hidden, the primary verified email is used instead.
-- **Admin accounts:**
-  - The first admin is created from `auth.admin.bootstrap*`, and only when no admin exists. It must **change its password on first sign-in**; until then the gateway allows that token only on `/api/admin/account/*`.
-  - After `maxFailedAttempts` failures the account is locked for `lockoutMinutes`.
-  - Unknown usernames and wrong passwords return the same response and take the same time.
-  - Changing the password signs out all other sessions of that admin.
-- **Auditing and analytics:** every login attempt is written to `auth.login_events` and published to the Redis stream `events:auth`, which feeds analytics in Phase 4. Prometheus gets `auth_logins_total{kind,result}` and `auth_active_sessions{kind}`.
-
-## Live tracking (tracking-service)
-
-**Data sources** (all free and open). Set them in `services.json` → `tracking`:
-
-| Setting | Options | Role |
-|---|---|---|
-| `provider` | `simulator` (default for development), `opensky` | **Global feed.** Decides which flights are active. OpenSky returns every airborne aircraft worldwide in one call. |
-| `watchProvider` | `adsbLol`, `none` | **Fast refresh** of flights users are watching (every `adsbLol.pollIntervalSeconds`, 5 s by default). Adds registration and aircraft type. Only used with `opensky`. |
-
-- **OpenSky budget:** a global poll costs 4 API credits.
-  - Without credentials you get about 400 credits a day, so use `pollIntervalSeconds` ≥ 900.
-  - With a free account (`clientId`/`clientSecret`) you get about 4,000 a day, so use ≥ 90.
-  - The service warns at startup when the interval would exceed the budget, and backs off on HTTP 429.
-- **Matching flights to airlines:** flights are matched by the callsign's ICAO prefix (`UAL1003` belongs to `UAL`). Registrations such as `N123AB` and flights on the ground are ignored.
-- **Catalogue:** the airline catalogue (5,774 airlines) is seeded at startup from OpenFlights data. © OpenFlights contributors, ODbL 1.0; see [seed/README.md](services/tracking-service/seed/README.md).
-
-**API.** The gateway routes these as `/api/...`; all of them require a signed-in user.
-
-| Endpoint | Returns |
+| Command | Does |
 |---|---|
-| `GET /api/airlines?limit=100` | Airlines that have active flights, busiest first, with `activeFlights` |
-| `GET /api/airlines?search=air india` | Catalogue search by ICAO, IATA or name. Best match first; among equal matches, airlines with live flights first. |
-| `GET /api/airlines/{icao}` | One airline with its live count |
-| `GET /api/airlines/{icao}/flights` | Active flights of that airline, sorted by callsign |
-| `GET /api/flights/{icao24}?trail=true` | One flight, its airline, and the trail `[[lat, lon, altM, unixS], …]` |
-| `POST /api/flights/watch` `{"icao24": [...]}` | Validates **1–5 flights of one airline**. Returns 422 `invalid_selection` / `mixed_airlines` or 404 `not_active`. Marks the flights as watched for `watchTtlSeconds` and returns their current state. |
-
-All values are in SI units: metres, m/s and degrees.
-
-**Redis keys.** The gateway reads these in Phase 3:
-- `trk:f:{icao24}`: flight JSON, with a TTL of `staleAfterSeconds`
-- `trk:a:{ICAO}`: active flights of an airline
-- `trk:counts`: active-flight count per airline
-- `trk:t:{icao24}`: trail
-- `trk:watch`: watched flights
-- pub/sub `trk:pos:{ICAO}`: `{airline, ts, flights[], removed[]}` after every update
-
-**Scaling:** only the instance holding the Redis lock `trk:ingest:leader` ingests data, so any number of replicas can serve the API.
-
-## User portal: from airline to live map
-
-1. **Airlines** (`/`): airlines with flights in the air, busiest first, refreshed every 30 s. You can search by name, ICAO or IATA code.
-2. **Active flights** (`/airlines/{ICAO}`): a table of the airline's airborne flights showing route, altitude, speed, heading, aircraft and time airborne, refreshed every 20 s.
-   - Tick **up to 5** flights; the other checkboxes lock once 5 are picked.
-   - Then choose **Track live**, or use the row's **Track** button for a single flight.
-3. **Live tracking** (`/track?ids=…`):
-   - A MapLibre map with an OpenFreeMap basemap (free, OpenStreetMap data, no API key).
-   - One colour per flight, with the plane icon rotated to its heading and a trail.
-   - Between updates, aircraft are moved forward along their heading at their speed (at most 120 s ahead), so the map stays smooth even on a 90 s OpenSky feed.
-   - The side panel shows altitude, speed, heading, climb rate, aircraft/registration, time airborne and last update.
-   - When a flight lands it is marked *no longer reported*.
-
-**Live WebSocket** (`/ws` on the gateway; the dev server proxies it):
-
-| Direction | Frame |
-|---|---|
-| client → gateway | `{type:"subscribe", icao24:[1–5 ids]}`, `{type:"unsubscribe"}`, `{type:"ping"}` |
-| gateway → client | `ready`, `subscribed {airline, flights, watchTtlSeconds}`, `positions {ts, flights, removed}`, `ended`, `error {error, message}`, `pong` |
-
-- **Authentication:** the user's access cookie, plus an `Origin` check against `cors.origins`.
-- **Validation:** selections go through tracking-service `POST /flights/watch` (1–5 flights, one airline). That call is repeated every `watchTtlSeconds/2` while subscribed.
-- **Delivery:** only the subscribed flights are relayed from `trk:pos:{ICAO}`.
-- **Close codes:** `4401` means unauthenticated or the token expired; the client refreshes its session and reconnects automatically. `4403` means a foreign origin, `4400` a bad frame, `4429` too many messages.
-- **Reconnecting:** after network drops the client reconnects with backoff (1 s → 30 s) and re-subscribes.
-
-## Admin console & analytics (analytics-service)
-
-**Pages:**
-- **Overview:** users signed in now, registered users, aircraft tracked now, live-map viewers; an activity chart (sign-ins, tracking sessions, sign-ups); most-tracked airlines and flights; top trackers; a recent-activity feed; service health; and failed admin sign-ins.
-- **Users:** a searchable, paginated directory with each user's tracking activity.
-- **Performance:** per service, the status, requests/s, error rate, p95 latency, CPU and memory, plus request-rate and p95 charts.
-
-Every chart has a table view, and one time-range filter scopes the whole page.
-
-**Data flow:**
-
-| Source | How it reaches analytics |
-|---|---|
-| auth-service | Redis stream `events:auth` (sign-ups, sign-ins, failed admin sign-ins, lockouts, password changes) |
-| gateway | Redis stream `events:tracking`: one `track.start` per live-tracking subscription (user, airline, flights) |
-| auth-service internal API | `GET /internal/users/summary` and `GET /internal/users` (internal token only; the gateway does **not** route these) |
-| tracking-service | `GET /airlines` for the current number of aircraft and airlines |
-| Prometheus | `up`, `http_requests_total` (Rails: `http_server_requests_total`), latency histograms, `process_cpu_seconds_total`, `process_resident_memory_bytes`, `gateway_ws_connections` |
-
-- **Ingestion:** a Redis **consumer group** (`analytics`) reads both streams into `analytics.auth_events` and `analytics.tracking_events`.
-  - Delivery is at-least-once, and the unique stream id makes inserts idempotent.
-  - The group starts at id 0, so events that were already in the streams are back-filled on first start.
-- **Settings:** stream names and batch sizes live under `analytics.streams` in `services.json`.
-
-**API**, behind the admin JWT: `GET /api/admin/overview`, `/activity?range=24h|7d|30d`, `/top?range=…`, `/users?search=&limit=&offset=`, `/events?limit=`, `/performance?range=1h|6h|24h`.
-
-> **Service-to-service URLs use `127.0.0.1`, not `localhost`.** On Windows, `localhost` resolves to IPv6 `::1` first, and calling an IPv4-only listener that way costs about 2 s per call. Measured before the fix: the admin overview took about 4.2 s. After: about 100 ms. Browser-facing URLs (the portals, the GitHub callback) keep `localhost`.
-
-## Gateway security model
-
-- JWTs are verified against the auth-service JWKS (RS256). **User and admin tokens have different audiences**, so a user token can never open `/api/admin/*`.
-- Client-supplied `x-user-id`, `x-user-role`, `x-session-id`, `x-forwarded-for` and `x-internal-token` headers are always stripped. The gateway sets them itself after verification, and services trust only requests that carry the internal token.
-- **CSRF:** every mutating `/api` request must send `X-Requested-With: aerotrack` (set in `csrf` in `gateway.json`). A custom header forces a CORS preflight, which only the portal origins pass. Cookies are also `SameSite=Lax`.
-- Rate limiting is shared through Redis, and requests still go through if Redis is briefly unavailable.
+| `npm run setup` | First-time config, secrets, JWT keys, `.env` |
+| `npm run config:migrate` | Add new config keys to existing local files |
+| `npm run infra:up` / `infra:down` / `infra:logs` | Manage the Docker infrastructure |
+| `npm run dev:<service>` | Run one component in development mode |
+| `npm run icons` | Regenerate favicons from `public/favicon.svg` |
+| `node scripts/build-airline-seed.mjs` | Rebuild the airline catalogue from OpenFlights |
 
 ## Tests
 
 ```sh
-(cd services/auth-service && go test ./...)   # unit + integration (needs `npm run infra:up`; uses Redis DB 15, cleans up its rows)
-(cd services/tracking-service && cargo test)  # geo, parsers, simulator, selection rules + API/live-store integration (Redis DB 15)
-(cd services/analytics-service && ruby test/event_consumer_test.rb)  # stream-entry parsing
-npm --prefix gateway test                     # access guard, audiences, CSRF, trusted headers, live WebSocket (real sockets)
-npm --prefix frontend run test:all            # interceptors, both portals, flight selection (max 5), live socket client, formatting, dead reckoning
+(cd services/auth-service && go test ./...)                      # unit + integration (needs infra; uses Redis DB 15)
+(cd services/tracking-service && cargo test)                     # unit + API/live-store integration
+(cd services/analytics-service && ruby test/event_consumer_test.rb)
+npm --prefix gateway test                                        # guard, CSRF, WebSocket over real sockets
+npm --prefix frontend run test:all                               # shared lib, user portal, admin console
 ```
+
+## Repository layout
+
+```
+config/          JSON config templates (real files and keys are git-ignored)
+docs/runbooks/   operating guide for every component
+frontend/        Angular workspace: user-portal, admin-portal, shared (design system, HTTP interceptors)
+gateway/         API gateway (TypeScript)
+infra/           Postgres init script, Prometheus scrape config
+scripts/         setup, config migration, airline seed, favicon generation
+services/        auth-service (Go), tracking-service (Rust), analytics-service (Ruby)
+```
+
+## Common problems
+
+| Problem | Fix |
+|---|---|
+| A service exits with `invalid config … CHANGE_ME` | `npm run setup` (first time) or `npm run config:migrate` (after pulling) |
+| Every call takes about 2 s on Windows | Use `127.0.0.1` for service-to-service URLs, not `localhost` (see the [runbooks index](docs/runbooks/README.md)) |
+| GitHub sign-in returns `github_not_configured` | Add the OAuth App credentials to `auth.github` |
+| Live map doesn't render | Restart `npm run dev:user-portal` after changing `angular.json`; see the [user portal runbook](docs/runbooks/user-portal.md#troubleshooting) |
+
+## Data sources and licences
+
+- Airline catalogue: © [OpenFlights](https://openflights.org/data) contributors, ODbL 1.0 ([seed/README.md](services/tracking-service/seed/README.md)).
+- Live data: [OpenSky Network](https://opensky-network.org) and [adsb.lol](https://adsb.lol) (open ADS-B data).
+- Basemap: [OpenFreeMap](https://openfreemap.org), with © OpenMapTiles and © OpenStreetMap contributors.
 
 ## Roadmap
 
-- [x] **Phase 0**: scaffold, config files, docker-compose, startup migrations, health checks and metrics everywhere
-- [x] **Phase 1**: auth (GitHub SSO users, admin username/password with argon2id and lockout, JWT/JWKS, refresh sessions)
-- [x] **Phase 2**: tracking backend (airline seed data, OpenSky / adsb.lol / simulator providers, Redis live state, pub/sub)
-- [x] **Phase 3**: user portal (airlines → active flights → live map, 1–5 flights of the same airline, WebSocket)
-- [x] **Phase 4**: analytics service and admin dashboard (signed-in users, usage, system performance)
-- [ ] **Phase 5**: tests, Dockerfiles, CI, hardening
+- [x] **Phase 0:** scaffold, configuration, Docker infrastructure, startup migrations, health and metrics
+- [x] **Phase 1:** authentication (GitHub SSO users; admin username and password with argon2id and lockout; JWT/JWKS; refresh sessions)
+- [x] **Phase 2:** tracking backend (airline catalogue; OpenSky, adsb.lol and simulator; Redis live state; pub/sub)
+- [x] **Phase 3:** live tracking UI (airlines → flights → live map, 1–5 flights of one airline, WebSocket)
+- [x] **Phase 4:** analytics service and admin dashboards
+- [ ] **Phase 5:** Dockerfiles, CI, production hardening
